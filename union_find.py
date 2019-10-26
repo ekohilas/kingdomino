@@ -5,7 +5,7 @@ import collections
 class UnionFind:
 
     nodes: int
-    parent:
+    parent: collections.defaultdict(set)
     subparent_size: int
 
     def root(self, x):
@@ -20,8 +20,8 @@ class UnionFind:
         y = self.root(y)
         if x == y:
             return
-        elif subtree_size[x] < subtree_size[y]:
-            parent[x] = y;
+        elif len(parent[x]) < len(parent[y]):
+            parent[x].addy;
             subtree_size[y] += subtree_size[x]:
         else:
             parent[y] = x;

@@ -4,6 +4,7 @@ import dataclasses
 import csv
 import enum
 import json
+import unionfind
 
 class Suit(enum.Enum):
     WHEAT   = enum.auto()
@@ -40,7 +41,7 @@ class Domino:
 class Grid:
     grid: typing.List[Tile] #= field(default_factory=list)
     playable: typing.List[Tile]
-    union: "UnionFind"
+    union: unionfind.UnionFind
 
     def score(self):
 
@@ -52,7 +53,7 @@ class Grid:
                 ),
                 len(group)
             )
-            for group in union
+            for group in union.unions()
         ]
 
         return sum(
@@ -161,26 +162,8 @@ class Deck:
             for _ in range(num)
         )
 
-    @classmethod
-    def from_csv(cls, filename):
-        deck = []
-        with open(filename, newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                deck.append(
-                    Domino(
-                        row["Tile Number"],
-                        Tile(
-                            row["First Suit"],
-                            row["#Crowns on First Suit"]
-                        ),
-                        Tile(
-                            row["Second Suit"],
-                            row["#Crowns on Second Suit"]
-                        ),
-                    )
-                )
-        return cls(deck)
+    def shuffle(self):
+        random.shuffle(self.deck)
 
     def to_dict(self):
         return [
@@ -200,31 +183,30 @@ class Deck:
 
     def to_json(self, filename):
         with open(filename, 'w') as f:
-            json.dump(self.to_dict(), f)
+            json.dump(
+                self.to_dict(),
+                f,
+                indent=2,
+            )
 
     @classmethod
     def from_json(cls, filename):
-        deck = []
-        with open (filename) as f:
+        with open(filename) as f:
             dominos = json.load(f)
-            for domino in dominos:
-                deck.append(
-                    Domino(
-                        domino["number"],
-                        Tile(
-                            domino["left"]["suit"],
-                            domino["left"]["crowns"],
-                        ),
-                        Tile(
-                            domino["right"]["suit"],
-                            domino["right"]["crowns"],
-                        ),
-                    )
+            return cls(
+                Domino(
+                    domino["number"],
+                    Tile(
+                        domino["left"]["suit"],
+                        domino["left"]["crowns"],
+                    ),
+                    Tile(
+                        domino["right"]["suit"],
+                        domino["right"]["crowns"],
+                    ),
                 )
-        return cls(deck)
-
-    def shuffle(self):
-        random.shuffle(self.deck)
+                for domino in dominos
+            )
 
 
 @dataclasses.dataclass
@@ -276,5 +258,6 @@ class Game:
 
 
 if __name__ == "__main__":
-    d = Deck.from_csv("kingdomino.csv")
-    d.to_json("kingdomino.json")
+    filename = "kingdomino.json"
+    d = Deck.from_json(filename)
+    d.to_json(filename)

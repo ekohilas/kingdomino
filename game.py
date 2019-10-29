@@ -35,6 +35,15 @@ class Rule(enum.Flag):
     HARMONY         = enum.auto()
     MIGHTY_DUEL     = enum.auto()
 
+    @classmethod
+    def default(cls, num_players):
+        if num_players == 2:
+            return cls.TWO_PLAYERS
+        if num_players == 3:
+            return cls.THREE_PLAYERS
+        if num_players == 4:
+            return cls.FOUR_PLAYERS
+
 
 class Suit(enum.Enum):
     WHEAT   = enum.auto()
@@ -69,10 +78,10 @@ class Domino:
 
 @dataclasses.dataclass
 class Board:
-    grid: typing.List[Tile] = field(default_factory=self.create_grid)
+    grid: typing.List[typing.Optional[Tile]] = field(default_factory=self.create_grid)
     playable: typing.List[Tile] = field(default_factory=list)
-    union: unionfind.UnionFind
-    rules: enum.Rule = Rule.TWO_PLAYERS
+    union: unionfind.UnionFind = field(default_factory=unionfind.UnionFind(self.
+    rules: enum.Rule
     discards: List[Domino] = field(default_factory=list)
 
     def create_grid(self):
@@ -197,7 +206,6 @@ class Board:
 class Player:
     name: str
     board: Board
-    ...
 
     def place(self, domino):
         return self.board.play(domino, point)
@@ -206,7 +214,7 @@ class Player:
 
 @dataclasses.dataclass
 class Line:
-    line: typing.List[typing.Tuple[Domino, Player]]
+    line: typing.List[typing.List[Domino, typing.Option[Player]]]
 
     def dominos(self):
        return [domino for domino, player in line]
@@ -220,6 +228,11 @@ class Line:
         else:
             raise ValueError
 
+    def fill(self, dominos):
+        self.line = [
+            [domino, None]
+            for domino in dominos
+        ]
 
 @dataclasses.dataclass
 class Deck:
@@ -292,7 +305,7 @@ class Game:
     line: Line
     deck: Deck
     turn: int = 0
-    rules: enum.Rule = Rule.TWO_PLAYERS
+    rules: enum.Rule = Rule.default(len(self.players))
 
     def setup(self):
         if turn == 0:
@@ -341,7 +354,7 @@ class Game:
             domino, player = self.line.line.pop(0)
             print(player.board)
             x, y, z = map(int, input("x, y, z: ").split(", "))
-            domino.direction = Direction[z]
+            domino.direction = Direction(z)
             player.place(domino, Point(x, y))
             self.order.append(player)
 
@@ -352,15 +365,34 @@ class Game:
         self.place()
 
     def final_score(self):
-        for player in self.players:
-            print(player.name, player.board.score())
+        for i, name, score in enumerate(
+            sorted(
+                player.name, player.board.score() for player in self.players,
+                key=lambda x: x[1],
+                reversed=True
+            ),
+            start=1
+        ):
+            print("{i}. {name}: {score}")
 
 
 if __name__ == "__main__":
+
     filename = "kingdomino.json"
-    d = Deck.from_json(filename)
+
+    dominos = Deck.from_json(filename)
+
+    players = [
+        Player(
+            name=input("Player {i} name: "),
+            board=Board(),
+        )
+        for i in range(int(input("How many players? (2/3/4)")))
+    ]
+
+    #rules = Rule(int(input("What rules?")))
 
     g = Game(
-        deck=d
-        players=p
+        deck=dominos
+        players=players
     )

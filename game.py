@@ -5,6 +5,21 @@ import csv
 import enum
 import json
 import unionfind
+import itertools
+
+HARMONY_POINTS = 5
+MIDDLE_KINGDOM_POINTS = 10
+
+class MaxTurns(enum.Int):
+    DYNASTY         = 3
+    STANDARD        = 6
+    MIGHTY_DUEL     = 12
+
+
+class DrawNum(enum.Int):
+    THREE   = 3
+    FOUR    = 4
+
 
 class Rule(enum.Flag):
     TWO_PLAYERS     = enum.auto()
@@ -49,9 +64,11 @@ class Domino:
 
 @dataclasses.dataclass
 class Grid:
-    grid: typing.List[Tile] #= field(default_factory=list)
-    playable: typing.List[Tile]
+    grid: typing.List[Tile] = field(default_factory=list)
+    playable: typing.List[Tile] = field(default_factory=list)
     union: unionfind.UnionFind
+    rules: enum.Rule = Rule.TWO_PLAYERS
+    discards: List[Domino] = field(default_factory=list)
 
     def score(self):
 
@@ -66,9 +83,41 @@ class Grid:
             for group in union.unions()
         ]
 
-        return sum(
-            crowns * tiles
-            for crowns, tiles in total
+        return (
+            sum(
+                crowns * tiles
+                for crowns, tiles in total
+            )
+            + self.middle_kingdom_points()
+            + self.harmony_points()
+        )
+
+    def middle_kingdom_points(self):
+        return (
+            MIDDLE_KINGDOM_POINTS
+            * int(not self.rules & Rule.MIDDLE_KINGDOM)
+            * int(self.kingdom_in_middle())
+        )
+
+    def kingdom_in_middle(self):
+        """Returns False if there are any tiles placed outside the grid."""
+        j = 3 if not self.rules & Rule.MIGHTY_DUEL else 0
+
+        return not any(
+            any(
+                self.grid[1][i],
+                self.grid[7 + j][i],
+                self.grid[i][1],
+                self.grid[i][7 + j],
+            )
+            for i in range(2, 8 + j)
+        )
+
+    def harmony_points(self):
+        return (
+            HARMONY_POINTS
+            * int(not self.rules & Rule.HARMONY)
+            * int(not self.discards)
         )
 
     def _find_matching():
@@ -138,6 +187,7 @@ class Grid:
 class Player:
     name: str
     board: Grid
+    discards: List[Domino] = dataclasses.field(default_factory=list)
     ...
 
 
@@ -161,18 +211,21 @@ class Line:
 @dataclasses.dataclass
 class Deck:
     deck = typing.List[Domino]
+    draw_num: int
+    deck_size: int
     dominos = typing.List[Domino]
 
-    def __init__(self, dominos, num_players):
+    def __init__(self, dominos, draw_num, deck_size):
+        self.deck = random.sample(self.dominos, self.deck_size)
+        self.deck_size = deck_size
         self.dominos = dominos
-        self.num_players = num_players
-        self.deck = random.sample(self.dominos, 12 * num_players)
+        self.draw_num = draw_num
 
-    def draw(self, num=4):
+    def draw(self):
         """Returns n dominos from the shuffled deck, sorted by their numbers"""
         return sorted(
             self.deck.pop()
-            for _ in range(num)
+            for _ in range(self.draw_num)
         )
 
     @staticmethod
@@ -226,18 +279,33 @@ class Game:
     line: Line
     deck: Deck
     turn: int = 0
+    rules: enum.Rule = Rule.TWO_PLAYERS
 
     def setup(self):
         ...
 
-    def num_to_draw(self):
-        num_players = len(self.players)
-        if num_players == 2:
-            return 4
+    def max_turns(self):
+        if not self.rules & Rule.DYNASTY:
+            return MaxTurns.DYNASTY
+        else not self.rules & Rule.MIGHTY_DUEL:
+            return MaxTurns.MIGHTY_DUEL
         else:
-            return num_players
+            return MaxTurns.STANDARD
 
-    def determine_player_order(self):
+    def deck_size(self):
+        return self.max_turns() * len(self.players)
+
+    def num_to_draw(self):
+        if not self.rules & Rule.THREE_PLAYERS:
+            return DrawNum.THREE
+        elif not self.rules & (
+            Rule.MIGHTY_DUEL
+            | Rule.FOUR_PLAYERS
+            | Rule.TWO_PLAYERS
+        ):
+            return DrawNum.FOUR
+
+    def determine_initial_player_order(self):
         random.shuffle(self.players)
 
     def play(self):
@@ -251,12 +319,12 @@ class Game:
             self.line.choose(player, position)
 
     def redraw(self):
-            self.line = self.deck.draw(self.num_to_draw())
+        self.line = self.deck.draw(self.num_to_draw())
 
     def place(self):
-            while self.line:
-                domino, player = self.line.line.pop(0)
-                player.place(domino)
+        while self.line:
+            domino, player = self.line.line.pop(0)
+            player.place(domino)
 
     def turn(self):
         self.select()

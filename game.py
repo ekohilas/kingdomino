@@ -6,6 +6,16 @@ import enum
 import json
 import unionfind
 
+class Rule(enum.Flag):
+    TWO_PLAYERS     = enum.auto()
+    THREE_PLAYERS   = enum.auto()
+    FOUR_PLAYERS    = enum.auto()
+    DYNASTY         = enum.auto()
+    MIDDLE_KINGDOM  = enum.auto()
+    HARMONY         = enum.auto()
+    MIGHTY_DUEL     = enum.auto()
+
+
 class Suit(enum.Enum):
     WHEAT   = enum.auto()
     FOREST  = enum.auto()
@@ -151,9 +161,12 @@ class Line:
 @dataclasses.dataclass
 class Deck:
     deck = typing.List[Domino]
+    dominos = typing.List[Domino]
 
-    def __init__(self, deck):
-        self.deck = deck
+    def __init__(self, dominos, num_players):
+        self.dominos = dominos
+        self.num_players = num_players
+        self.deck = random.sample(self.dominos, 12 * num_players)
 
     def draw(self, num=4):
         """Returns n dominos from the shuffled deck, sorted by their numbers"""
@@ -162,10 +175,8 @@ class Deck:
             for _ in range(num)
         )
 
-    def shuffle(self):
-        random.shuffle(self.deck)
-
-    def to_dict(self):
+    @staticmethod
+    def to_dict(list_):
         return [
             {
                 "number": domino.number,
@@ -178,13 +189,13 @@ class Deck:
                     "crowns": domino.right.crowns,
                 },
             }
-            for domino in self.deck
+            for domino in list_
         ]
 
     def to_json(self, filename):
         with open(filename, 'w') as f:
             json.dump(
-                self.to_dict(),
+                Deck.to_dict(self.dominos),
                 f,
                 indent=2,
             )

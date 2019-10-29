@@ -205,7 +205,7 @@ class Player:
     ...
 
     def place(self, domino):
-        return self.board.
+        return self.board.play(domino, point)
 
 
 
@@ -347,7 +347,9 @@ class Game:
         while self.line:
             domino, player = self.line.line.pop(0)
             print(player.board)
-            player.place(domino, Point(input("x, y: ")))
+            x, y, z = map(int, input("x, y, z: ").split(", "))
+            domino.direction = Direction[z]
+            player.place(domino, Point(x, y))
             self.order.append(player)
 
     def turn(self):
@@ -364,6 +366,8 @@ class Game:
 if __name__ == "__main__":
     filename = "kingdomino.json"
     d = Deck.from_json(filename)
+
     g = Game(
         deck=d
         players=p
+    )

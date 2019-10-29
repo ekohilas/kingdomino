@@ -7,8 +7,10 @@ import json
 import unionfind
 import itertools
 
+
 HARMONY_POINTS = 5
 MIDDLE_KINGDOM_POINTS = 10
+
 
 class MaxTurns(enum.Int):
     DYNASTY         = 3
@@ -64,11 +66,24 @@ class Domino:
 
 @dataclasses.dataclass
 class Grid:
-    grid: typing.List[Tile] = field(default_factory=list)
+    grid: typing.List[Tile] = field(default_factory=self.create_grid)
     playable: typing.List[Tile] = field(default_factory=list)
     union: unionfind.UnionFind
     rules: enum.Rule = Rule.TWO_PLAYERS
     discards: List[Domino] = field(default_factory=list)
+
+    def create_grid(self):
+        size = 12 if not self.rules & Rule.MIGHTY_DUEL else 9
+        middle = size // 2
+        grid = [
+            [
+                None
+                for _ in range(size)
+            ]
+            for _ in range(size)
+        ]
+        grid[middle][middle] = Tile(Suit.CASTLE)
+        return grid
 
     def score(self):
 

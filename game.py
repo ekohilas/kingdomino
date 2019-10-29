@@ -14,6 +14,7 @@ class Point(typing.NamedTuple):
     x: int
     y: int
 
+
 class MaxTurns(enum.Int):
     DYNASTY         = 3
     STANDARD        = 6
@@ -33,9 +34,6 @@ class Rule(enum.Flag):
     MIDDLE_KINGDOM  = enum.auto()
     HARMONY         = enum.auto()
     MIGHTY_DUEL     = enum.auto()
-
-    def __contains__(a, b):
-        return a & b == b
 
 
 class Suit(enum.Enum):
@@ -80,13 +78,7 @@ class Board:
     def create_grid(self):
         size = 12 if Rule.MIGHTY_DUEL in self.rules else 9
         middle = size // 2
-        grid = [
-            [
-                None
-                for _ in range(size)
-            ]
-            for _ in range(size)
-        ]
+        grid = [[None] * size for _ in range(size)]
         grid[middle][middle] = Tile(Suit.CASTLE)
         return grid
 
@@ -321,7 +313,7 @@ class Game:
         if Rule.THREE_PLAYERS in self.rules:
             return DrawNum.THREE
         elif (
-                Rule.MIGHTY_DUEL | Rule.FOUR_PLAYERS | Rule.TWO_PLAYERS
+            Rule.MIGHTY_DUEL | Rule.FOUR_PLAYERS | Rule.TWO_PLAYERS
         ) in self.rules:
             return DrawNum.FOUR
 

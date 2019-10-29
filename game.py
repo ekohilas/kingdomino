@@ -300,7 +300,8 @@ class Game:
     rules: enum.Rule = Rule.TWO_PLAYERS
 
     def setup(self):
-        ...
+        if turn == 0:
+            self.set_initial_order()
 
     def max_turns(self):
         if not self.rules & Rule.DYNASTY:
@@ -323,7 +324,7 @@ class Game:
         ):
             return DrawNum.FOUR
 
-    def set_initial_player_order(self):
+    def set_initial_order(self):
         self.order = random.sample(self.players, len(self.players))
 
     def play(self):
@@ -336,27 +337,28 @@ class Game:
 
     def select(self):
         while self.order:
+            print(self.line)
             self.line.choose(
-                input(" | ".join(map(str, range(self.num_to_draw())))),
+                input(f"0 - {self.num_to_draw() + 1} : "),
                 self.order.pop(0)
             )
 
     def place(self):
         while self.line:
             domino, player = self.line.line.pop(0)
-            player.place(domino, Point(input()))
+            print(player.board)
+            player.place(domino, Point(input("x, y: ")))
             self.order.append(player)
 
     def turn(self):
+        print(f"Turn {self.turn}")
         self.draw()
-        if turn == 0:
-            self.set_initial_player_order()
         self.select()
         self.place()
 
     def final_score(self):
         for player in self.players:
-            print(player, player.board.score())
+            print(player.name, player.board.score())
 
 
 if __name__ == "__main__":

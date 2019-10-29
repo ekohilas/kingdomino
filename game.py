@@ -34,6 +34,9 @@ class Rule(enum.Flag):
     HARMONY         = enum.auto()
     MIGHTY_DUEL     = enum.auto()
 
+    def __contains__(a, b):
+        return a & b == b
+
 
 class Suit(enum.Enum):
     WHEAT   = enum.auto()
@@ -75,7 +78,7 @@ class Board:
     discards: List[Domino] = field(default_factory=list)
 
     def create_grid(self):
-        size = 12 if not self.rules & Rule.MIGHTY_DUEL else 9
+        size = 12 if Rule.MIGHTY_DUEL in self.rules else 9
         middle = size // 2
         grid = [
             [
@@ -112,13 +115,13 @@ class Board:
     def middle_kingdom_points(self):
         return (
             MIDDLE_KINGDOM_POINTS
-            * int(not self.rules & Rule.MIDDLE_KINGDOM)
+            * int(Rule.MIDDLE_KINGDOM in self.rules)
             * int(self.kingdom_in_middle())
         )
 
     def kingdom_in_middle(self):
         """Returns False if there are any tiles placed outside the grid."""
-        j = 3 if not self.rules & Rule.MIGHTY_DUEL else 0
+        j = 3 if Rule.MIGHTY_DUEL in self.rules else 0
 
         return not any(
             any(
@@ -133,7 +136,7 @@ class Board:
     def harmony_points(self):
         return (
             HARMONY_POINTS
-            * int(not self.rules & Rule.HARMONY)
+            * int(Rule.HARMONY in self.rules)
             * int(not self.discards)
         )
 
@@ -304,9 +307,9 @@ class Game:
             self.set_initial_order()
 
     def max_turns(self):
-        if not self.rules & Rule.DYNASTY:
+        if Rule.DYNASTY in self.rules:
             return MaxTurns.DYNASTY
-        else not self.rules & Rule.MIGHTY_DUEL:
+        else Rule.MIGHTY_DUEL in self.rules:
             return MaxTurns.MIGHTY_DUEL
         else:
             return MaxTurns.STANDARD
@@ -315,13 +318,11 @@ class Game:
         return self.max_turns() * len(self.players)
 
     def num_to_draw(self):
-        if not self.rules & Rule.THREE_PLAYERS:
+        if Rule.THREE_PLAYERS in self.rules:
             return DrawNum.THREE
-        elif not self.rules & (
-            Rule.MIGHTY_DUEL
-            | Rule.FOUR_PLAYERS
-            | Rule.TWO_PLAYERS
-        ):
+        elif (
+                Rule.MIGHTY_DUEL | Rule.FOUR_PLAYERS | Rule.TWO_PLAYERS
+        ) in self.rules:
             return DrawNum.FOUR
 
     def set_initial_order(self):

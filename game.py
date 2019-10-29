@@ -5,12 +5,14 @@ import csv
 import enum
 import json
 import unionfind
-import itertools
-
 
 HARMONY_POINTS = 5
 MIDDLE_KINGDOM_POINTS = 10
 
+@dataclasses.dataclass
+class Point(typing.NamedTuple):
+    x: int
+    y: int
 
 class MaxTurns(enum.Int):
     DYNASTY         = 3
@@ -43,11 +45,11 @@ class Suit(enum.Enum):
     CASTLE  = enum.auto()
 
 
-class Orientation(enum.Enum):
-    EAST    = ( 0, 1)
-    SOUTH   = (-1, 0)
-    WEST    = (0, -1)
-    NORTH   = ( 1, 0)
+class Direction(enum.Enum):
+    EAST    = Point( 0, 1)
+    SOUTH   = Point(-1, 0)
+    WEST    = Point( 0, -1)
+    NORTH   = Point( 1, 0)
 
 
 @dataclasses.dataclass
@@ -61,7 +63,7 @@ class Domino:
     number: int
     left: Tile
     right: Tile
-    orientation: Orientation = Orientation.EAST
+    direction: Direction = Direction.EAST
 
 
 @dataclasses.dataclass
@@ -138,40 +140,38 @@ class Grid:
     def _find_matching():
         ...
 
-    def playable_tiles(self, domino, orientation):
+    def playable_tiles(self, domino, direction):
         ...
 
-    def _add_to_grid(self, domino, orientation, x, y):
+    def _add_to_grid(self, domino, direction, point):
         # check if valid
 
-        grid[x][y] = domino.left
-        dx, dy = orientation
-        grid[x + dx][y + dy] = domino.right
+        grid[point.x][point.y] = domino.left
+        grid[point.x + direction.x][point.y + direction.y] = domino.right
 
-        self._unionise(domino, orientation, x, y)
+        self._unionise(domino, point)
 
-    def play(self, domino, orientation, x, y):
+    def play(self, domino, direction, point):
         ...
 
-    def _all_tile_edges(self, domino, orientation, x, y):
-        dx, dy = orientation
+    def _all_tile_edges(self, domino, point):
         return (
-            _tile_edges(domino.left, x, y)
-            + _tile_edges(domino.right, x + dx, y + dy)
+            _tile_edges(domino.left, point)
+            + _tile_edges(domino.right, point + domino.direction)
         )
 
 
-    def _tile_edges(self, tile, x, y):
+    def _tile_edges(self, tile, point):
         return [
-            ((x, y), (x + i, y + j))
-            for i, j in Orientation
+            (point, p + d)
+            for d in Direction
         ]
 
-    def _unionise(self, domino, x, y):
-        for tile_x, tile_y in _all_tile_edges(domino.left, x, y):
-            if tile_x is None or tile_y is None:
+    def _unionise(self, domino, point):
+        for point_a, point_b in _all_tile_edges(domino, point):
+            if point_a is None or point_b is None:
                 continue
-            union.join(edge_x, edge_y)
+            union.join(point_a, point_b)
 
 
     def __str__(self):

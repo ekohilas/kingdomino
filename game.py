@@ -67,7 +67,7 @@ class Domino:
 
 
 @dataclasses.dataclass
-class Grid:
+class Board:
     grid: typing.List[Tile] = field(default_factory=self.create_grid)
     playable: typing.List[Tile] = field(default_factory=list)
     union: unionfind.UnionFind
@@ -146,12 +146,12 @@ class Grid:
     def _add_to_grid(self, domino, direction, point):
         # check if valid
 
-        grid[point.x][point.y] = domino.left
-        grid[point.x + direction.x][point.y + direction.y] = domino.right
+        self.grid[point.x][point.y] = domino.left
+        self.grid[point.x + direction.x][point.y + direction.y] = domino.right
 
         self._unionise(domino, point)
 
-    def play(self, domino, direction, point):
+    def play(self, domino, point):
         ...
 
     def _all_tile_edges(self, domino, point):
@@ -201,9 +201,12 @@ class Grid:
 @dataclasses.dataclass
 class Player:
     name: str
-    board: Grid
-    discards: List[Domino] = dataclasses.field(default_factory=list)
+    board: Board
     ...
+
+    def place(self, domino):
+        return self.board.
+
 
 
 @dataclasses.dataclass
@@ -320,38 +323,45 @@ class Game:
         ):
             return DrawNum.FOUR
 
-    def determine_initial_player_order(self):
-        random.shuffle(self.players)
+    def set_initial_player_order(self):
+        self.order = random.sample(self.players, len(self.players))
 
     def play(self):
         while self.deck:
             self.turn()
         self.final_score()
 
-    def select(self):
-        while not self.line.selected():
-            print(self.line)
-            self.line.choose(player, position)
-
-    def redraw(self):
+    def draw(self):
         self.line = self.deck.draw(self.num_to_draw())
+
+    def select(self):
+        while self.order:
+            self.line.choose(
+                input(" | ".join(map(str, range(self.num_to_draw())))),
+                self.order.pop(0)
+            )
 
     def place(self):
         while self.line:
             domino, player = self.line.line.pop(0)
-            player.place(domino)
+            player.place(domino, Point(input()))
+            self.order.append(player)
 
     def turn(self):
+        self.draw()
+        if turn == 0:
+            self.set_initial_player_order()
         self.select()
-        self.redraw()
         self.place()
 
     def final_score(self):
         for player in self.players:
-            print(player, player.grid.score())
+            print(player, player.board.score())
 
 
 if __name__ == "__main__":
     filename = "kingdomino.json"
     d = Deck.from_json(filename)
-    d.to_json(filename)
+    g = Game(
+        deck=d
+        players=p

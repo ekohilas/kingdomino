@@ -6,13 +6,18 @@ import enum
 import json
 import unionfind
 
-HARMONY_POINTS = 5
-MIDDLE_KINGDOM_POINTS = 10
 
 @dataclasses.dataclass
 class Point(typing.NamedTuple):
     x: int
     y: int
+
+
+class Color(enum.Flag):
+    BLUE    = enum.auto()
+    GREEN   = enum.auto()
+    RED     = enum.auto()
+    YELLOW  = GREEN | RED
 
 
 class MaxTurns(enum.Int):
@@ -24,6 +29,11 @@ class MaxTurns(enum.Int):
 class DrawNum(enum.Int):
     THREE   = 3
     FOUR    = 4
+
+
+class Points(enum.Int):
+    HARMONY         = 5
+    MIDDLE_KINGDOM  = 10
 
 
 class Rule(enum.Flag):
@@ -63,6 +73,13 @@ class Direction(enum.Enum):
 
 
 @dataclasses.dataclass
+class Player:
+    name: str
+    color: Color
+
+
+
+@dataclasses.dataclass
 class Tile:
     suit: Suit
     crowns: int = 0
@@ -78,9 +95,10 @@ class Domino:
 
 @dataclasses.dataclass
 class Board:
+    player: Player
     grid: typing.List[typing.Optional[Tile]] = field(default_factory=self.create_grid)
     playable: typing.List[Tile] = field(default_factory=list)
-    union: unionfind.UnionFind = field(default_factory=unionfind.UnionFind(self.
+    union: unionfind.UnionFind = field(default_factory=unionfind.UnionFind)
     rules: enum.Rule
     discards: List[Domino] = field(default_factory=list)
 
@@ -202,15 +220,6 @@ class Board:
         return string
 
 
-@dataclasses.dataclass
-class Player:
-    name: str
-    board: Board
-
-    def place(self, domino):
-        return self.board.play(domino, point)
-
-
 
 @dataclasses.dataclass
 class Line:
@@ -247,6 +256,9 @@ class Deck:
         self.dominos = dominos
         self.draw_num = draw_num
 
+    def empty(self):
+        return bool(self.deck)
+
     def draw(self):
         """Returns n dominos from the shuffled deck, sorted by their numbers"""
         return sorted(
@@ -255,7 +267,18 @@ class Deck:
         )
 
     @staticmethod
-    def to_dict(list_):
+    def to_dict(list_: typing.List[Domino]) -> typing.List[
+        typing.Dict[
+            str,
+            typing.Union[
+                str,
+                typing.Dict[
+                    str,
+                    str,
+                ],
+            ]
+        ]
+    ]:
         return [
             {
                 "number": domino.number,
@@ -302,14 +325,35 @@ class Deck:
 @dataclasses.dataclass
 class Game:
     players: typing.List[Player]
+    boards: typing.List[Board]
     line: Line
     deck: Deck
     turn: int = 0
-    rules: enum.Rule = Rule.default(len(self.players))
+    rules: enum.Rule
 
-    def setup(self):
-        if turn == 0:
-            self.set_initial_order()
+    def __init__(self, deck, players, rules=None):
+
+        self.players = players
+
+        self.rules = Rule.default(len(self.players))
+        self.add_rules(rules)
+
+        self.boards = [
+            Board(
+                player=player,
+                rules=self.rules
+            ) for player in self.players
+        ]
+
+        #TODO init/refactor line
+
+        self.set_initial_order()
+
+
+    def add_rules(self, rules):
+        """TODO: add rule checking"""
+        if rules:
+            self.rules |= rules
 
     def max_turns(self):
         if Rule.DYNASTY in self.rules:
@@ -333,8 +377,9 @@ class Game:
     def set_initial_order(self):
         self.order = random.sample(self.players, len(self.players))
 
-    def play(self):
-        while self.deck:
+    def start(self):
+        self.turn += 1
+        while not self.deck.empty():
             self.turn()
         self.final_score()
 
@@ -363,6 +408,7 @@ class Game:
         self.draw()
         self.select()
         self.place()
+        self.turn += 1
 
     def final_score(self):
         for i, name, score in enumerate(
@@ -385,14 +431,13 @@ if __name__ == "__main__":
     players = [
         Player(
             name=input("Player {i} name: "),
-            board=Board(),
+            color=Color(i),
         )
         for i in range(int(input("How many players? (2/3/4)")))
     ]
 
-    #rules = Rule(int(input("What rules?")))
-
-    g = Game(
+    game = Game(
         deck=dominos
         players=players
     )
+    game.start()

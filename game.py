@@ -96,7 +96,6 @@ class Domino:
 
 @dataclasses.dataclass
 class Board:
-    player: Player
     grid: typing.List[typing.Optional[Tile]] = field(default_factory=self.create_grid)
     playable: typing.List[Tile] = field(default_factory=list)
     union: unionfind.UnionFind = field(default_factory=unionfind.UnionFind)
@@ -225,20 +224,24 @@ class Board:
 @dataclasses.dataclass
 class Line:
 
-    def __init__(self, dominos: typing.List[Domino]):
+    def __init__(
+        self,
+        dominos: typing.List[Domino]
+    ):
         self.line = sorted(dominos)
 
-    def dominos(self):
-       return [domino for domino, player in line]
+    def pop(self) -> Domino:
+        return self.line.pop(0)
 
-    def selected(self):
-        return all(player for domino, player in line)
-
-    def choose(self, player, position):
-        if line[position][1] is None:
-            line[position][1] = player
-        else:
-            raise ValueError
+    def choose(
+            self,
+            player: Player,
+            domino: Domino=None,
+            index: int=None
+    ) -> None:
+        if domino:
+            index = self.line.index(domino)
+        self.line[index].player = player
 
 @dataclasses.dataclass
 class Deck:
@@ -322,7 +325,7 @@ class Deck:
 @dataclasses.dataclass
 class Game:
     players: typing.List[Player]
-    boards: typing.List[Board]
+    boards: typing.Dict[Player, Board]
     line: Line
     deck: Deck
     turn: int = 0
@@ -335,12 +338,11 @@ class Game:
         self.rules = Rule.default(len(self.players))
         self.add_rules(rules)
 
-        self.boards = [
-            Board(
-                player=player,
+        self.boards = {
+            player: Board(
                 rules=self.rules
             ) for player in self.players
-        ]
+        }
 
         self.set_initial_order()
 
@@ -393,12 +395,14 @@ class Game:
             )
 
     def place(self):
-        while self.line:
-            domino, player = self.line.line.pop(0)
-            print(player.board)
+        while not self.line.empty():
+            domino = self.line.pop()
+            player = domino.player
+            board = self.boards[player]
+
             x, y, z = map(int, input("x, y, z: ").split(", "))
             domino.direction = Direction(z)
-            player.place(domino, Point(x, y))
+            board.play(domino, Point(x, y))
             self.order.append(player)
 
     def turn(self):

@@ -12,6 +12,12 @@ class Point(typing.NamedTuple):
     x: int
     y: int
 
+    def adjacent(self) -> typing.List[Point]:
+        return [
+            self + direction
+            for direction in Direction
+        ]
+
 
 class Color(enum.Flag):
     BLUE    = enum.auto()
@@ -93,14 +99,31 @@ class Domino:
     direction: Direction = Direction.EAST
     player: Player = None
 
+    def flip(self):
+        self.left, self.right = self.right, self.left
+
+
+@dataclasses.dataclass
+class Play:
+    domino: Domino
+    point: Point
+    direction: Direction
+
+    def adjacent(self) -> typing.List[Point]:
+        return (
+            self.point.adjacent()
+            + (self.point + self.direction).adjacent()
+        )
+
+
 
 @dataclasses.dataclass
 class Board:
+    discards: List[Domino] = field(default_factory=list)
     grid: typing.List[typing.Optional[Tile]] = field(default_factory=self.create_grid)
     playable: typing.List[Tile] = field(default_factory=list)
-    union: unionfind.UnionFind = field(default_factory=unionfind.UnionFind)
     rules: enum.Rule
-    discards: List[Domino] = field(default_factory=list)
+    union: unionfind.UnionFind = field(default_factory=unionfind.UnionFind)
 
     def create_grid(self):
         size = 12 if Rule.MIGHTY_DUEL in self.rules else 9
@@ -162,38 +185,55 @@ class Board:
     def _find_matching():
         ...
 
-    def playable_tiles(self, domino, direction):
-        ...
+    def valid_plays(self, play: Play) -> typing.Set[Play]:
+        """Returns a list of all valid plays given a Play containing a domino."""
+        assert play.Domino is not None
+        directions = iter((play.direction,)) if play.direction else Direction
+        points = iter((point,)) if point else self._all_points()
+        for point in points:
+            for direction in directions:
+                ...
 
-    def _add_to_grid(self, domino, direction, point):
-        # check if valid
-
-        self.grid[point.x][point.y] = domino.left
-        self.grid[point.x + direction.x][point.y + direction.y] = domino.right
-
-        self._unionise(domino, point)
-
-    def play(self, domino, point):
-        ...
-
-    def _all_tile_edges(self, domino, point):
-        return (
-            _tile_edges(domino.left, point)
-            + _tile_edges(domino.right, point + domino.direction)
-        )
+    def play(self, play: Play):
+        try:
+            self._is_valid_play(play)
+            self._add_to_grid(play)
+            self._unionise(play)
 
 
-    def _tile_edges(self, tile, point):
-        return [
-            (point, p + d)
-            for d in Direction
-        ]
+        except:
+            raise ValueError
 
-    def _unionise(self, domino, point):
-        for point_a, point_b in _all_tile_edges(domino, point):
+    def _add_to_grid(self, play: Play):
+
+        x, y = play.point
+        dx, dy = play.direction
+        left, right = play.domino
+
+        self.grid[x][y] = left
+        self.grid[x + dx][y + dy] = right
+
+    def _unionise(self, play: Play):
+        for point_a, point_b in play.adjacent_points(_all_neighbours(play):
             if point_a is None or point_b is None:
                 continue
             union.join(point_a, point_b)
+
+
+    def _is_valid_play(self, play: Play):
+        return all(
+            (
+                self._within_bounds(play),
+                self._matching_nieghbours(play),
+                self._n
+                play in self.valid_plays(play),
+            )
+        )
+
+
+
+
+
 
 
     def __str__(self):
@@ -234,10 +274,10 @@ class Line:
         return self.line.pop(0)
 
     def choose(
-            self,
-            player: Player,
-            domino: Domino=None,
-            index: int=None
+        self
+        player: Player,
+        domino: Domino=None,
+        index: int=None
     ) -> None:
         if domino:
             index = self.line.index(domino)

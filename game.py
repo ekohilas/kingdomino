@@ -91,6 +91,7 @@ class Domino:
     left: Tile
     right: Tile
     direction: Direction = Direction.EAST
+    player: Player = None
 
 
 @dataclasses.dataclass
@@ -223,7 +224,9 @@ class Board:
 
 @dataclasses.dataclass
 class Line:
-    line: typing.List[typing.List[Domino, typing.Option[Player]]]
+
+    def __init__(self, dominos: typing.List[Domino]):
+        self.line = sorted(dominos)
 
     def dominos(self):
        return [domino for domino, player in line]
@@ -236,12 +239,6 @@ class Line:
             line[position][1] = player
         else:
             raise ValueError
-
-    def fill(self, dominos):
-        self.line = [
-            [domino, None]
-            for domino in dominos
-        ]
 
 @dataclasses.dataclass
 class Deck:
@@ -261,10 +258,10 @@ class Deck:
 
     def draw(self):
         """Returns n dominos from the shuffled deck, sorted by their numbers"""
-        return sorted(
+        return [
             self.deck.pop()
             for _ in range(self.draw_num)
-        )
+        ]
 
     @staticmethod
     def to_dict(list_: typing.List[Domino]) -> typing.List[
@@ -345,10 +342,7 @@ class Game:
             ) for player in self.players
         ]
 
-        #TODO init/refactor line
-
         self.set_initial_order()
-
 
     def add_rules(self, rules):
         """TODO: add rule checking"""
@@ -384,7 +378,11 @@ class Game:
         self.final_score()
 
     def draw(self):
-        self.line = self.deck.draw(self.num_to_draw())
+        self.line = Line(
+            self.deck.draw(
+                self.num_to_draw()
+            )
+        )
 
     def select(self):
         while self.order:

@@ -5,6 +5,7 @@ import csv
 import enum
 import json
 import unionfind
+import collections
 
 
 @dataclasses.dataclass
@@ -84,7 +85,6 @@ class Player:
     color: Color
 
 
-
 @dataclasses.dataclass
 class Tile:
     suit: Suit
@@ -124,12 +124,12 @@ class Board:
     playable: typing.List[Tile] = field(default_factory=list)
     rules: enum.Rule
     union: unionfind.UnionFind = field(default_factory=unionfind.UnionFind)
+    size: int = 12 if Rule.MIGHTY_DUEL in self.rules else 9
+    middle = Point(size // 2, size // 2)
 
     def create_grid(self):
-        size = 12 if Rule.MIGHTY_DUEL in self.rules else 9
-        middle = size // 2
-        grid = [[None] * size for _ in range(size)]
-        grid[middle][middle] = Tile(Suit.CASTLE)
+        grid = [[None] * self.size for _ in range(size)]
+        grid[self.middle.x][self.middle.y] = Tile(Suit.CASTLE)
         return grid
 
     def score(self):
@@ -214,9 +214,9 @@ class Board:
         self.grid[x + dx][y + dy] = right
 
     def _unionise(self, play: Play):
-        for point_a, point_b in play.adjacent_points(_all_neighbours(play):
+        for point_a, point_b in play.adjacent_points(_all_neighbours(play)):
             if point_a is None or point_b is None:
-                continue
+            continue
             union.join(point_a, point_b)
 
 
@@ -225,16 +225,28 @@ class Board:
             (
                 self._within_bounds(play),
                 self._matching_nieghbours(play),
-                self._n
+                self._n,
                 play in self.valid_plays(play),
             )
         )
 
+    def _find_vacant_points(self) -> typing.List(Point):
+        vacancies = []
+        seen = set()
+        queue = collections.deque(self.middle)
+        while queue:
 
+            point = queue.popleft()
+            if point in seen:
+                continue
 
-
-
-
+            seen.add(point)
+            for direction in point.adjacents():
+                if self.grid[direction.x][direction.y] is None:
+                    vacancies.append(direction)
+                else:
+                    queue.append(direction)
+        return vacancies
 
     def __str__(self):
         colours = [

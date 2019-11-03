@@ -1,32 +1,47 @@
 import typing
-import dataclasses
-
-#http://code.activestate.com/recipes/577225-union-find/
 
 T = typing.TypeVar('T')
 
+class Node:
 
-@dataclasses.dataclass
-class Node(typing.Generic[T]):
-    item: typing.Generic[T]
-    parent: 'Node' = self
-    size: int = 1
+    def __init__(self, item: typing.Generic[T]):
+        self.item = item
+        self.parent: "Node" = self
+        self.size: int = 1
 
+    def __eq__(self, other: "Node"):
+        return self.item == other.item
 
-@dataclasses.dataclass
+    def __hash__(self):
+        return hash(self.item)
+
 class UnionFind:
 
-    def find(self, n: Node) -> T:
-        if n.parent == x:
-            return n.item
+    def __init__(self):
+        self._nodes = {}
+
+    def _to_node(self, item: T) -> Node:
+        if item not in self._nodes:
+            self._nodes[item] = Node(item)
+        return self._nodes[item]
+
+    def find(self, item: T) -> T:
+        return self._find(self._to_node(item)).item
+
+    def _find(self, node: Node) -> Node:
+        if node.parent == node:
+            return node
         else:
-            n.parent = self.root(n.parent)
-            return n.parent.item
+            node.parent = self._find(node.parent)
+            return node.parent
 
-    def join(self, x: Node, y: Node) -> None:
+    def join(self, x: T, y: T) -> None:
 
-        root_x = self.find(x)
-        root_y = self.find(y)
+        node_x = self._to_node(x)
+        node_y = self._to_node(y)
+
+        root_x = self._find(node_x)
+        root_y = self._find(node_y)
 
         if root_x == root_y:
             return
@@ -37,20 +52,26 @@ class UnionFind:
         root_y.parent = root_x
         root_x.size += root_y.size
 
-    def unions(self):
+    def unions(self) -> typing.Set[T]:
+
         d = {}
-        for i in range(self.n):
-            root = self.find(i)
+        for node in self._nodes.values():
+            root = self._find(node)
             if root not in d:
                 d[root] = set()
-            d[root].add(i)
-        return {x.item for item in d.values()}
+            d[root].add(node)
+
+        return [
+            {node.item for node in nodes}
+            for nodes in d.values()
+        ]
 
 
 if __name__ == "__main__":
     u = UnionFind()
-    u.join(Node(0),Node(1))
-    u.join(Node(2),Node(3))
-    u.join(Node(3),Node(4))
-    for i in range(5):
-        print(u.root(i))
+    u.join(0, 1)
+    u.join(2, 3)
+    u.join(3, 4)
+    for i in range(6):
+        print(u.find(i))
+    print(u.unions())

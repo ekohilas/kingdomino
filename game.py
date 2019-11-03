@@ -84,6 +84,7 @@ class Suit(enum.Enum):
     WATER   = enum.auto()
     WHEAT   = enum.auto()
     CASTLE  = enum.auto()
+    NONE    = enum.auto()
 
 
     @classmethod
@@ -116,6 +117,7 @@ class Suit(enum.Enum):
             Suit.WATER:     "blue",
             Suit.WHEAT:     "yellow",
             Suit.CASTLE:    "white",
+            Suit.NONE:      "default",
         }[self]
 
 
@@ -305,24 +307,33 @@ class Board:
         return 0 <= point.x < self.size and 0 <= point.y < self.size
 
     def _valid_adjacent(self, play: Play) -> bool:
-        for x, y in play.adjacent_edges():
-            print(x, y, self._valid_connection(x, y))
+        print(any(
+            self._valid_connection(x, y)
+            for x, y in play.adjacent_edges()
+        ))
         return any(
             self._valid_connection(x, y)
             for x, y in play.adjacent_edges()
         )
 
-    def _valid_connection(self, x: Point, y: Point) -> bool:
+    def _valid_connection(self, a: Point, b: Point) -> bool:
+        # TODO wtf?
+        if self._tile_at(b) or self._tile_at(b):
+            pass#print(self._tile_at(b).suit)
+        val = None
         try:
-            return any(
+            val = any(
                 (
-                    self._tile_at(x).suit == Tile.CASTLE,
-                    self._tile_at(y).suit == Tile.CASTLE,
-                    self._matching_suit(x, y),
+                    self._tile_at(a).suit == Suit.CASTLE,
+                    self._tile_at(b).suit == Suit.CASTLE,
+                    self._matching_suit(a, b),
                 )
             )
+            val = self._tile_at(b).suit == Suit.CASTLE
         except:
-            return False
+            val = False
+        print(val)
+        return val
 
     def _matching_suit(self, x: Point, y: Point) -> bool:
         return self._tile_at(x).suit == self._tile_at(y).suit
@@ -341,7 +352,7 @@ class Board:
                 self.union.join(a, b)
 
     def _tile_at(self, point):
-        return self.gird[point.x][point.y]
+        return self.grid[point.x][point.y]
 
     # VALIDATION
 

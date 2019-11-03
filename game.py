@@ -9,17 +9,17 @@ import collections
 
 
 @dataclasses.dataclass
-class Point(typing.NamedTuple):
+class Point:
     x: int
     y: int
 
-    def adjacent_points(self) -> typing.List[Point]:
+    def adjacent_points(self) -> typing.List["Point"]:
         return [
             self + direction
             for direction in Direction
         ]
 
-    def adjacent_edges(self) -> typing.List[typing.tuple[Point, Point]]:
+    def adjacent_edges(self) -> typing.List[typing.Tuple["Point", "Point"]]:
         return [
             (self, point)
             for point in self.adjacent_points()
@@ -33,18 +33,18 @@ class Color(enum.Flag):
     YELLOW  = GREEN | RED
 
 
-class MaxTurns(enum.Int):
+class MaxTurns(enum.IntEnum):
     DYNASTY         = 3
     STANDARD        = 6
     MIGHTY_DUEL     = 12
 
 
-class DrawNum(enum.Int):
+class DrawNum(enum.IntEnum):
     THREE   = 3
     FOUR    = 4
 
 
-class Points(enum.Int):
+class Points(enum.IntEnum):
     HARMONY         = 5
     MIDDLE_KINGDOM  = 10
 
@@ -124,7 +124,7 @@ class Play:
             if point not in (self.point, self.point + self.direction)
         ]
 
-    def adjacent_edges(self) -> typing.List[typing.tuple[Point, Point]]:
+    def adjacent_edges(self) -> typing.List[typing.Tuple[Point, Point]]:
         return [
             edge for edge in (
                 self.point.adjacent_edges()
@@ -139,13 +139,15 @@ class Play:
 
 @dataclasses.dataclass
 class Board:
-    discards: List[Domino] = field(default_factory=list)
-    grid: typing.List[typing.Optional[Tile]] = field(default_factory=self.create_grid)
-    playable: typing.List[Tile] = field(default_factory=list)
-    rules: enum.Rule
-    union: unionfind.UnionFind = field(default_factory=unionfind.UnionFind)
-    size: int = 12 if Rule.MIGHTY_DUEL in self.rules else 9
-    middle = Point(size // 2, size // 2)
+    rules: Rule
+    discards: typing.List[Domino] = dataclasses.field(default_factory=list)
+    playable: typing.List[Tile] = dataclasses.field(default_factory=list)
+    union: unionfind.UnionFind = dataclasses.field(default_factory=unionfind.UnionFind)
+
+    def __post_init__(self):
+        self.grid: typing.List[typing.List[typing.Optional[Tile]]] = self.create_grid()
+        self.size: int = 12 if Rule.MIGHTY_DUEL in self.rules else 9
+        self.middle = Point(size // 2, size // 2)
 
     def create_grid(self):
         grid = [[None] * self.size for _ in range(size)]
@@ -288,7 +290,7 @@ class Board:
 
         return valid
 
-    def _vacant_points(self) -> typing.List(Point):
+    def _vacant_points(self) -> typing.List[Point]:
         vacant_points = []
         seen = set()
         queue = collections.deque(self.middle)
@@ -355,31 +357,10 @@ class Line:
             index = self.line.index(domino)
         self.line[index].player = player
 
-@dataclasses.dataclass
-class Deck:
-    deck = typing.List[Domino]
-    draw_num: int
-    deck_size: int
-    dominos = typing.List[Domino]
-
-    def __init__(self, dominos, draw_num, deck_size):
-        self.deck = random.sample(self.dominos, self.deck_size)
-        self.deck_size = deck_size
-        self.dominos = dominos
-        self.draw_num = draw_num
-
-    def empty(self):
-        return bool(self.deck)
-
-    def draw(self):
-        """Returns n dominos from the shuffled deck, sorted by their numbers"""
-        return [
-            self.deck.pop()
-            for _ in range(self.draw_num)
-        ]
+class Dominos(list):
 
     @staticmethod
-    def to_dict(list_: typing.List[Domino]) -> typing.List[
+    def to_dict(self) -> typing.List[
         typing.Dict[
             str,
             typing.Union[
@@ -403,13 +384,13 @@ class Deck:
                     "crowns": domino.right.crowns,
                 },
             }
-            for domino in list_
+            for domino in self
         ]
 
-    def to_json(self, filename):
+    def to_json(self, filename: str) -> None:
         with open(filename, 'w') as f:
             json.dump(
-                Deck.to_dict(self.dominos),
+                self.to_dict(),
                 f,
                 indent=2,
             )
@@ -434,6 +415,30 @@ class Deck:
             )
 
 
+class Deck:
+
+    def __init__(
+        self,
+        dominos: Dominoes,
+        draw_num: int,
+        deck_size: int,
+    ):
+        self.deck = random.sample(self.dominos, self.deck_size)
+        self.deck_size = deck_size
+        self.dominos = dominos
+        self.draw_num = draw_num
+
+    def empty(self):
+        return bool(self.deck)
+
+    def draw(self):
+        """Returns n dominos from the shuffled deck, sorted by their numbers"""
+        return [
+            self.deck.pop()
+            for _ in range(self.draw_num)
+        ]
+
+
 @dataclasses.dataclass
 class Game:
     boards: typing.Dict[Player, Board]
@@ -442,7 +447,7 @@ class Game:
 
     def __init__(
         self,
-        deck: deck,
+        deck: Deck,
         players: typing.List[Player],
         rules: Rule=None
     ):

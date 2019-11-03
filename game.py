@@ -217,7 +217,7 @@ class Board:
         return all(
             (
                 self._play_within_bounds(play),
-                self._matching_nieghbours(play),
+                self._valid_adjacent(play),
                 ...
             )
         )
@@ -231,33 +231,44 @@ class Board:
     def _within_bounds(self, point: Point) -> bool:
         return 0 <= point.x < self.size and 0 <= point.y < self.size
 
-    def _matching_nieghbours(self, play: Play) -> bool:
+    def _valid_adjacent(self, play: Play) -> bool:
         return any(
-            _matching_landscape(a, b)
+            _valid_connection(a, b)
             for a, b in play.adjacent_edges()
         )
 
-    def _add_to_grid(self, play: Play):
+    def _valid_connection(self, a: Point, b: Point) -> bool:
+        try:
+            return any(
+                (
+                    self._tile_at(a).suit == Tile.CASTLE,
+                    self._tile_at(b).suit == Tile.CASTLE,
+                    self._matching_suit(a, b),
+                )
+            )
+        except:
+            return False
+
+    def _matching_suit(self, a: Point, b: Point) -> bool:
+        return self._tile_at(a).suit == self._tile_at(b).suit
+
+    def _add_to_grid(self, play: Play) -> None:
         x, y = play.point
         dx, dy = play.direction
         self.grid[x][y] = play.domino.left
         self.grid[x + dx][y + dy] = play.domino.right
 
-    def _matching_landscape(self, a: Point, b: Point):
-        return (
-            self.grid[a.x][a.y] is None
-            or self.grid[b.x][b.y] is None
-            or self.grid[a.x][a.y].suit == Tile.CASTLE
-            or self.grid[b.x][b.y].suit == Tile.CASTLE
-            or self.grid[a.x][a.y].suit == self.grid[b.x][b.y].suit
-        )
+    def _unionise(self, play: Play) -> None:
+        for a, b in play.adjacent_edges():
+            if self._tile_at(a) is None or self._tile_at(b) is None:
+                continue
+            if self._matching_suit(a, b):
+                self.union.join(a, b)
 
-    def _unionise(self, play: Play):
-        # TODO
-        for a, b in play.adjacent_points(_all_neighbours(play)):
-            if point_a is None or point_b is None:
-            continue
-            union.join(point_a, point_b)
+    def _tile_at(self, point):
+        return self.gird[point.x][point.y]
+
+    # VALIDATION
 
     def valid_plays(self, play: Play) -> typing.Set[Play]:
         """Returns a list of all valid plays given a Play containing a domino."""
@@ -274,18 +285,11 @@ class Board:
                 )
                 if self._valid_play(new_play):
                     valid.append(new_play)
+
         return valid
 
-
-
-
-    def _placeable(self, play: Play) -> bool:
-        ...
-
-
-
-    def _find_vacant_points(self) -> typing.List(Point):
-        vacancies = []
+    def _vacant_points(self) -> typing.List(Point):
+        vacant_points = []
         seen = set()
         queue = collections.deque(self.middle)
         while queue:
@@ -298,12 +302,12 @@ class Board:
             for new_point in point.adjacent_points():
                 if not self._within_bounds(new_point):
                     continue
-                if self.grid[new_point.x][new_point.y] is None:
-                    vacancies.append(new_point)
+                if self._tile_at(new_point) is None:
+                    vacant_points.append(new_point)
                 else:
                     queue.append(new_point)
 
-        return vacancies
+        return vacant_points
 
     def __str__(self):
         colours = [
@@ -329,7 +333,6 @@ class Board:
         return string
 
 
-
 @dataclasses.dataclass
 class Line:
 
@@ -343,7 +346,7 @@ class Line:
         return self.line.pop(0)
 
     def choose(
-        self
+        self,
         player: Player,
         domino: Domino=None,
         index: int=None
@@ -463,7 +466,7 @@ class Game:
     def max_turns(self):
         if Rule.DYNASTY in self.rules:
             return MaxTurns.DYNASTY
-        else Rule.MIGHTY_DUEL in self.rules:
+        elif Rule.MIGHTY_DUEL in self.rules:
             return MaxTurns.MIGHTY_DUEL
         else:
             return MaxTurns.STANDARD
@@ -524,7 +527,10 @@ class Game:
     def final_score(self):
         for i, name, score in enumerate(
             sorted(
-                player.name, player.board.score() for player in self.players,
+                (
+                    (player.name, player.board.score())
+                    for player in self.players
+                ),
                 key=lambda x: x[1],
                 reversed=True
             ),
@@ -548,7 +554,7 @@ if __name__ == "__main__":
     ]
 
     game = Game(
-        deck=dominos
-        players=players
+        deck=dominos,
+        players=players,
     )
     game.start()

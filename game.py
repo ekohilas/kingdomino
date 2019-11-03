@@ -116,16 +116,25 @@ class Play:
     direction: Direction
 
     def adjacent_points(self) -> typing.List[Point]:
-        return (
-            self.point.adjacent_points()
-            + (self.point + self.direction).adjacent_points()
-        )
+        return [
+            point for point in (
+                self.point.adjacent_points()
+                + (self.point + self.direction).adjacent_points()
+            )
+            if point not in (self.point, self.point + self.direction)
+        ]
 
     def adjacent_edges(self) -> typing.List[typing.tuple[Point, Point]]:
-        return (
-            self.point.adjacent_edges()
-            + (self.point + self.direction).adjacent_edges()
-        )
+        return [
+            edge for edge in (
+                self.point.adjacent_edges()
+                + (self.point + self.direction).adjacent_edges()
+            )
+            if edge not in (
+                (self.point, self.point + self.direction),
+                (self.point + self.direction, self.point),
+            )
+        ]
 
 
 @dataclasses.dataclass
@@ -142,6 +151,8 @@ class Board:
         grid = [[None] * self.size for _ in range(size)]
         grid[self.middle.x][self.middle.y] = Tile(Suit.CASTLE)
         return grid
+
+    # SCORING
 
     def score(self):
 
@@ -193,41 +204,44 @@ class Board:
             * int(not self.discards)
         )
 
-    def valid_plays(self, play: Play) -> typing.Set[Play]:
-        """Returns a list of all valid plays given a Play containing a domino."""
-        assert play.Domino is not None
-        #TODO does this work?
-        directions = iter((play.direction,)) if play.direction else Direction
-        points = iter((point,)) if point else self._vacant_points()
-        for point in points:
-            for direction in directions:
-
+    # PLAY VALIDATION
 
     def play(self, play: Play):
-        try:
-            self._is_valid_play(play)
-            self._add_to_grid(play)
-            self._unionise(play)
+        if not self.valid_play(play):
+            raise InvalidPlay
 
+        self._add_to_grid(play)
+        self._unionise(play)
 
-        except:
-            raise ValueError
+    def valid_play(self, play: Play):
+        return all(
+            (
+                self._play_within_bounds(play),
+                self._matching_nieghbours(play),
+                ...
+            )
+        )
+
+    def _play_within_bounds(self, play: Play) -> bool:
+        return (
+            self._within_bounds(play.point)
+            and self._within_bounds(play.point + play.direction)
+        )
+
+    def _within_bounds(self, point: Point) -> bool:
+        return 0 <= point.x < self.size and 0 <= point.y < self.size
+
+    def _matching_nieghbours(self, play: Play) -> bool:
+        return any(
+            _matching_landscape(a, b)
+            for a, b in play.adjacent_edges()
+        )
 
     def _add_to_grid(self, play: Play):
-
         x, y = play.point
         dx, dy = play.direction
-        left, right = play.domino
-
-        self.grid[x][y] = left
-        self.grid[x + dx][y + dy] = right
-
-    def _unionise(self, play: Play):
-        for point_a, point_b in play.adjacent_points(_all_neighbours(play)):
-            if point_a is None or point_b is None:
-            continue
-            union.join(point_a, point_b)
-
+        self.grid[x][y] = play.domino.left
+        self.grid[x + dx][y + dy] = play.domino.right
 
     def _matching_landscape(self, a: Point, b: Point):
         return (
@@ -238,27 +252,37 @@ class Board:
             or self.grid[a.x][a.y].suit == self.grid[b.x][b.y].suit
         )
 
+    def _unionise(self, play: Play):
+        # TODO
+        for a, b in play.adjacent_points(_all_neighbours(play)):
+            if point_a is None or point_b is None:
+            continue
+            union.join(point_a, point_b)
 
-    def _matching_nieghbours(self, play: Play) -> bool:
-        return any(
-            _matching_landscape(a, b)
-            for a, b in play.adjacent_edges()
-        )
+    def valid_plays(self, play: Play) -> typing.Set[Play]:
+        """Returns a list of all valid plays given a Play containing a domino."""
+        assert play.domino is not None
+        valid = []
+        directions = (play.direction,) if play.direction else Direction
+        points = (play.point,) if play.point else self._vacant_points()
+        for point in points:
+            for direction in directions:
+                new_play = Play(
+                    domino=play.domino,
+                    point=point,
+                    direction=direction
+                )
+                if self._valid_play(new_play):
+                    valid.append(new_play)
+        return valid
+
+
+
 
     def _placeable(self, play: Play) -> bool:
         ...
 
 
-
-    def _valid_play(self, play: Play):
-        return all(
-            (
-                self._within_bounds(play),
-                self._matching_nieghbours(play),
-                self._n,
-                play in self.valid_plays(play),
-            )
-        )
 
     def _find_vacant_points(self) -> typing.List(Point):
         vacancies = []
@@ -271,11 +295,14 @@ class Board:
                 continue
 
             seen.add(point)
-            for direction in point.adjacents():
-                if self.grid[direction.x][direction.y] is None:
-                    vacancies.append(direction)
+            for new_point in point.adjacent_points():
+                if not self._within_bounds(new_point):
+                    continue
+                if self.grid[new_point.x][new_point.y] is None:
+                    vacancies.append(new_point)
                 else:
-                    queue.append(direction)
+                    queue.append(new_point)
+
         return vacancies
 
     def __str__(self):

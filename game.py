@@ -13,10 +13,16 @@ class Point(typing.NamedTuple):
     x: int
     y: int
 
-    def adjacent(self) -> typing.List[Point]:
+    def adjacent_points(self) -> typing.List[Point]:
         return [
             self + direction
             for direction in Direction
+        ]
+
+    def adjacent_edges(self) -> typing.List[typing.tuple[Point, Point]]:
+        return [
+            (self, point)
+            for point in self.adjacent_points()
         ]
 
 
@@ -109,12 +115,17 @@ class Play:
     point: Point
     direction: Direction
 
-    def adjacent(self) -> typing.List[Point]:
+    def adjacent_points(self) -> typing.List[Point]:
         return (
-            self.point.adjacent()
-            + (self.point + self.direction).adjacent()
+            self.point.adjacent_points()
+            + (self.point + self.direction).adjacent_points()
         )
 
+    def adjacent_edges(self) -> typing.List[typing.tuple[Point, Point]]:
+        return (
+            self.point.adjacent_edges()
+            + (self.point + self.direction).adjacent_edges()
+        )
 
 
 @dataclasses.dataclass
@@ -182,17 +193,15 @@ class Board:
             * int(not self.discards)
         )
 
-    def _find_matching():
-        ...
-
     def valid_plays(self, play: Play) -> typing.Set[Play]:
         """Returns a list of all valid plays given a Play containing a domino."""
         assert play.Domino is not None
+        #TODO does this work?
         directions = iter((play.direction,)) if play.direction else Direction
-        points = iter((point,)) if point else self._all_points()
+        points = iter((point,)) if point else self._vacant_points()
         for point in points:
             for direction in directions:
-                ...
+
 
     def play(self, play: Play):
         try:
@@ -220,7 +229,28 @@ class Board:
             union.join(point_a, point_b)
 
 
-    def _is_valid_play(self, play: Play):
+    def _matching_landscape(self, a: Point, b: Point):
+        return (
+            self.grid[a.x][a.y] is None
+            or self.grid[b.x][b.y] is None
+            or self.grid[a.x][a.y].suit == Tile.CASTLE
+            or self.grid[b.x][b.y].suit == Tile.CASTLE
+            or self.grid[a.x][a.y].suit == self.grid[b.x][b.y].suit
+        )
+
+
+    def _matching_nieghbours(self, play: Play) -> bool:
+        return any(
+            _matching_landscape(a, b)
+            for a, b in play.adjacent_edges()
+        )
+
+    def _placeable(self, play: Play) -> bool:
+        ...
+
+
+
+    def _valid_play(self, play: Play):
         return all(
             (
                 self._within_bounds(play),

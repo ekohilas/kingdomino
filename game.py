@@ -436,17 +436,17 @@ class Deck:
 
 @dataclasses.dataclass
 class Game:
-    players: typing.List[Player]
     boards: typing.Dict[Player, Board]
     line: Line
-    deck: Deck
     turn: int = 0
-    rules: enum.Rule
 
-    def __init__(self, deck, players, rules=None):
-
+    def __init__(
+        self,
+        deck: deck,
+        players: typing.List[Player],
+        rules: Rule=None
+    ):
         self.players = players
-
         self.rules = Rule.default(len(self.players))
         self.add_rules(rules)
 

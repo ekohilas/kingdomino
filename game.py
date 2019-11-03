@@ -396,11 +396,12 @@ class Board:
         return vacant_points
 
     def __str__(self):
-        string = " " + "".join(map(str, range(self.size))) + "\n0"
-        for i, row in enumerate(self.grid, start=1):
+        string = " " + "".join(map(str, range(self.size))) + "\n"
+        for i, row in enumerate(self.grid):
+            string += str(i)
             for tile in row:
                 string += str(tile) if tile else " "
-            string += f"\n{i} "
+            string += "\n"
         return string
 
 

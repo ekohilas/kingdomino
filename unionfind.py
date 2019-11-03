@@ -52,7 +52,7 @@ class UnionFind:
         root_y.parent = root_x
         root_x.size += root_y.size
 
-    def unions(self) -> typing.Set[T]:
+    def groups(self) -> typing.Set[T]:
 
         d = {}
         for node in self._nodes.values():

@@ -6,12 +6,20 @@ import enum
 import json
 import unionfind
 import collections
+import colored
 
+class InvalidPlay(ValueError):
+    pass
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Point:
     x: int
     y: int
+
+    def __add__(self, other):
+        if isinstance(other, Direction):
+            other = other.value
+        return Point(self.x + other.x, self.y + other.y)
 
     def adjacent_points(self) -> typing.List["Point"]:
         return [
@@ -69,32 +77,87 @@ class Rule(enum.Flag):
 
 
 class Suit(enum.Enum):
-    WHEAT   = enum.auto()
     FOREST  = enum.auto()
-    WATER   = enum.auto()
     GRASS   = enum.auto()
-    SWAMP   = enum.auto()
     MINE    = enum.auto()
+    SWAMP   = enum.auto()
+    WATER   = enum.auto()
+    WHEAT   = enum.auto()
     CASTLE  = enum.auto()
 
 
+    @classmethod
+    def from_string(cls, string: str):
+        return {
+            "forest": cls.FOREST,
+            "grass" : cls.GRASS,
+            "mine"  : cls.MINE,
+            "swamp" : cls.SWAMP,
+            "water" : cls.WATER,
+            "wheat" : cls.WHEAT,
+        }[string]
+
+    def to_string(self) -> str:
+        return {
+            Suit.FOREST:    "forest",
+            Suit.GRASS:     "grass",
+            Suit.MINE:      "mine",
+            Suit.SWAMP:     "swamp",
+            Suit.WATER:     "water",
+            Suit.WHEAT:     "wheat",
+        }[self]
+
+    def to_color(self) -> str:
+        return {
+            Suit.FOREST:    "dark_green",
+            Suit.GRASS:     "light_green",
+            Suit.MINE:      "grey_0",
+            Suit.SWAMP:     "light_slate_grey",
+            Suit.WATER:     "blue",
+            Suit.WHEAT:     "yellow",
+            Suit.CASTLE:    "white",
+        }[self]
+
+
 class Direction(enum.Enum):
-    EAST    = Point( 0, 1)
-    SOUTH   = Point(-1, 0)
-    WEST    = Point( 0, -1)
-    NORTH   = Point( 1, 0)
+    EAST    = Point( 1, 0)
+    SOUTH   = Point( 0, 1)
+    WEST    = Point(-1, 0)
+    NORTH   = Point( 0,-1)
+
+    @classmethod
+    def from_string(cls, string: str):
+        return {
+            "east":     cls.EAST,
+            "south":    cls.SOUTH,
+            "west":     cls.WEST,
+            "north":    cls.NORTH,
+        }[string]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Player:
     name: str
     color: Color
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Tile:
     suit: Suit
     crowns: int = 0
+
+    def __str__(self):
+        if self.suit == Suit.CASTLE:
+            char = "C"
+        elif self.crowns == 0:
+            char = " "
+        else:
+            char = self.crowns
+
+        return colored.stylize(
+            char,
+            colored.fg("white") + colored.bg(self.suit.to_color())
+        )
 
 
 @dataclasses.dataclass(order=True)
@@ -107,6 +170,9 @@ class Domino:
 
     def flip(self):
         self.left, self.right = self.right, self.left
+
+    def __str__(self):
+        return f"{self.left}{self.right}"
 
 
 @dataclasses.dataclass
@@ -145,42 +211,46 @@ class Board:
     union: unionfind.UnionFind = dataclasses.field(default_factory=unionfind.UnionFind)
 
     def __post_init__(self):
-        self.grid: typing.List[typing.List[typing.Optional[Tile]]] = self.create_grid()
-        self.size: int = 12 if Rule.MIGHTY_DUEL in self.rules else 9
-        self.middle = Point(size // 2, size // 2)
+        self.size = 12 if Rule.MIGHTY_DUEL in self.rules else 9
+        half = self.size // 2
+        self.middle = Point(half, half)
+        self.grid = self.create_grid()
 
-    def create_grid(self):
-        grid = [[None] * self.size for _ in range(size)]
+    def create_grid(self) -> typing.List[typing.List[typing.Optional[Tile]]]:
+        grid = [[None] * self.size for _ in range(self.size)]
         grid[self.middle.x][self.middle.y] = Tile(Suit.CASTLE)
         return grid
 
     # SCORING
 
-    def score(self):
-
-        total = [
+    def crowns_and_tiles(self) -> typing.List[typing.Tuple[int, int]]:
+        return [
             (
                 sum(
-                    self.grid[x][y].crowns
-                    for x, y in group
+                    self.grid[point.x][point.y].crowns
+                    for point in points
                 ),
-                len(group)
+                len(points)
             )
-            for group in union.unions()
+            for points in self.union.groups()
         ]
 
+    def points(self):
         return (
             sum(
                 crowns * tiles
-                for crowns, tiles in total
+                for crowns, tiles in self.crowns_and_tiles()
             )
             + self.middle_kingdom_points()
             + self.harmony_points()
         )
 
+    def crowns(self):
+        return sum(lambda x: x[1] for x in self.crowns_and_tiles)
+
     def middle_kingdom_points(self):
         return (
-            MIDDLE_KINGDOM_POINTS
+            Points.MIDDLE_KINGDOM
             * int(Rule.MIDDLE_KINGDOM in self.rules)
             * int(self.kingdom_in_middle())
         )
@@ -191,17 +261,19 @@ class Board:
 
         return not any(
             any(
-                self.grid[1][i],
-                self.grid[7 + j][i],
-                self.grid[i][1],
-                self.grid[i][7 + j],
+                (
+                    self.grid[1][i],
+                    self.grid[7 + j][i],
+                    self.grid[i][1],
+                    self.grid[i][7 + j],
+                )
             )
             for i in range(2, 8 + j)
         )
 
     def harmony_points(self):
         return (
-            HARMONY_POINTS
+            Points.HARMONY
             * int(Rule.HARMONY in self.rules)
             * int(not self.discards)
         )
@@ -220,7 +292,6 @@ class Board:
             (
                 self._play_within_bounds(play),
                 self._valid_adjacent(play),
-                ...
             )
         )
 
@@ -234,25 +305,27 @@ class Board:
         return 0 <= point.x < self.size and 0 <= point.y < self.size
 
     def _valid_adjacent(self, play: Play) -> bool:
+        for x, y in play.adjacent_edges():
+            print(x, y, self._valid_connection(x, y))
         return any(
-            _valid_connection(a, b)
-            for a, b in play.adjacent_edges()
+            self._valid_connection(x, y)
+            for x, y in play.adjacent_edges()
         )
 
-    def _valid_connection(self, a: Point, b: Point) -> bool:
+    def _valid_connection(self, x: Point, y: Point) -> bool:
         try:
             return any(
                 (
-                    self._tile_at(a).suit == Tile.CASTLE,
-                    self._tile_at(b).suit == Tile.CASTLE,
-                    self._matching_suit(a, b),
+                    self._tile_at(x).suit == Tile.CASTLE,
+                    self._tile_at(y).suit == Tile.CASTLE,
+                    self._matching_suit(x, y),
                 )
             )
         except:
             return False
 
-    def _matching_suit(self, a: Point, b: Point) -> bool:
-        return self._tile_at(a).suit == self._tile_at(b).suit
+    def _matching_suit(self, x: Point, y: Point) -> bool:
+        return self._tile_at(x).suit == self._tile_at(y).suit
 
     def _add_to_grid(self, play: Play) -> None:
         x, y = play.point
@@ -312,30 +385,14 @@ class Board:
         return vacant_points
 
     def __str__(self):
-        colours = [
-            "on_grey",
-            "on_red",
-            "on_green",
-            "on_yellow",
-            "on_blue",
-            "on_magenta",
-            "on_cyan",
-            "on_white",
-        ]
-        string = ""
-        for row in grid:
+        string = " " + "".join(map(str, range(self.size))) + "\n0"
+        for i, row in enumerate(self.grid, start=1):
             for tile in row:
-                if tile is None:
-                    char = " "
-                elif tile.crowns > 0:
-                    char = tile.crowns
-                if tile.suit:
-                    string += coloured(char, "white", colours[tile.suit])
-            string += "\n"
+                string += str(tile) if tile else " "
+            string += f"\n{i} "
         return string
 
 
-@dataclasses.dataclass
 class Line:
 
     def __init__(
@@ -347,17 +404,27 @@ class Line:
     def pop(self) -> Domino:
         return self.line.pop(0)
 
+    def empty(self) -> bool:
+        return not self.line
+
     def choose(
         self,
         player: Player,
+        index: int=None,
         domino: Domino=None,
-        index: int=None
     ) -> None:
         if domino:
             index = self.line.index(domino)
         self.line[index].player = player
 
-class Dominos(list):
+    def __str__(self):
+        return "\n".join(
+            f"{' ' if domino.player else i}: {domino}"
+            for i, domino in enumerate(self.line)
+        )
+
+
+class Dominoes(list):
 
     @staticmethod
     def to_dict(self) -> typing.List[
@@ -376,11 +443,11 @@ class Dominos(list):
             {
                 "number": domino.number,
                 "left": {
-                    "suit": domino.left.suit,
+                    "suit": domino.left.suit.to_string(),
                     "crowns": domino.left.crowns,
                 },
                 "right": {
-                    "suit": domino.right.suit,
+                    "suit": domino.right.suit.to_string(),
                     "crowns": domino.right.crowns,
                 },
             }
@@ -401,14 +468,14 @@ class Dominos(list):
             dominos = json.load(f)
             return cls(
                 Domino(
-                    domino["number"],
-                    Tile(
-                        domino["left"]["suit"],
-                        domino["left"]["crowns"],
+                    number=int(domino["number"]),
+                    left=Tile(
+                        suit=Suit.from_string(domino["left"]["suit"]),
+                        crowns=int(domino["left"]["crowns"]),
                     ),
-                    Tile(
-                        domino["right"]["suit"],
-                        domino["right"]["crowns"],
+                    right=Tile(
+                        suit=Suit.from_string(domino["right"]["suit"]),
+                        crowns=int(domino["right"]["crowns"]),
                     ),
                 )
                 for domino in dominos
@@ -419,17 +486,16 @@ class Deck:
 
     def __init__(
         self,
-        dominos: Dominoes,
-        draw_num: int,
+        dominoes: Dominoes,
         deck_size: int,
+        draw_num: int,
     ):
-        self.deck = random.sample(self.dominos, self.deck_size)
         self.deck_size = deck_size
-        self.dominos = dominos
         self.draw_num = draw_num
+        self.deck = random.sample(dominoes, self.deck_size)
 
     def empty(self):
-        return bool(self.deck)
+        return not bool(self.deck)
 
     def draw(self):
         """Returns n dominos from the shuffled deck, sorted by their numbers"""
@@ -443,17 +509,23 @@ class Deck:
 class Game:
     boards: typing.Dict[Player, Board]
     line: Line
-    turn: int = 0
+    turn_num: int = 0
 
     def __init__(
         self,
-        deck: Deck,
+        dominoes: Dominoes,
         players: typing.List[Player],
-        rules: Rule=None
+        rules: Rule=None,
     ):
         self.players = players
         self.rules = Rule.default(len(self.players))
         self.add_rules(rules)
+
+        self.deck = Deck(
+            dominoes=dominoes,
+            draw_num=self.num_to_draw(),
+            deck_size=self.deck_size(),
+        )
 
         self.boards = {
             player: Board(
@@ -482,33 +554,33 @@ class Game:
     def num_to_draw(self):
         if Rule.THREE_PLAYERS in self.rules:
             return DrawNum.THREE
-        elif (
-            Rule.MIGHTY_DUEL | Rule.FOUR_PLAYERS | Rule.TWO_PLAYERS
-        ) in self.rules:
+        elif self.rules in (
+            Rule.MIGHTY_DUEL,
+            Rule.FOUR_PLAYERS,
+            Rule.TWO_PLAYERS,
+        ):
             return DrawNum.FOUR
+        else:
+            raise ValueError
 
     def set_initial_order(self):
         self.order = random.sample(self.players, len(self.players))
 
     def start(self):
-        self.turn += 1
+        self.turn_num += 1
         while not self.deck.empty():
             self.turn()
         self.final_score()
 
     def draw(self):
-        self.line = Line(
-            self.deck.draw(
-                self.num_to_draw()
-            )
-        )
+        self.line = Line(self.deck.draw())
 
     def select(self):
         while self.order:
             print(self.line)
             self.line.choose(
-                input(f"0 - {self.num_to_draw() + 1} : "),
-                self.order.pop(0)
+                self.order.pop(0),
+                int(input(f"> ")),
             )
 
     def place(self):
@@ -517,49 +589,55 @@ class Game:
             player = domino.player
             board = self.boards[player]
 
-            x, y, z = map(int, input("x, y, z: ").split(", "))
-            domino.direction = Direction(z)
-            board.play(domino, Point(x, y))
+            print(board)
+            x, y, direction = input("x y direction: ").split()
+            board.play(
+                Play(
+                    domino=domino,
+                    point=Point(int(x), int(y)),
+                    direction=Direction.from_string(direction),
+                )
+            )
             self.order.append(player)
 
     def turn(self):
-        print(f"Turn {self.turn}")
+        print(f"Turn {self.turn_num}")
         self.draw()
         self.select()
         self.place()
-        self.turn += 1
+        self.turn_num += 1
 
     def final_score(self):
-        for i, name, score in enumerate(
+        for i, (name, points) in enumerate(
             sorted(
                 (
-                    (player.name, player.board.score())
+                    (player.name, self.boards[player].points())
                     for player in self.players
                 ),
                 key=lambda x: x[1],
-                reversed=True
+                reverse=True,
             ),
             start=1
         ):
-            print("{i}. {name}: {score}")
+            print(f"{i}. {name}: {points}")
 
 
 if __name__ == "__main__":
 
     filename = "kingdomino.json"
 
-    dominos = Deck.from_json(filename)
+    dominoes = Dominoes.from_json(filename)
 
     players = [
         Player(
-            name=input("Player {i} name: "),
+            name=input(f"Player {i+1} name: "),
             color=Color(i),
         )
-        for i in range(int(input("How many players? (2/3/4)")))
+        for i in range(int(input("How many players? (2/3/4): ")))
     ]
 
     game = Game(
-        deck=dominos,
+        dominoes=dominoes,
         players=players,
     )
     game.start()

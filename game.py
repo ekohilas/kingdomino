@@ -127,10 +127,10 @@ class Suit(enum.Enum):
 
 
 class Direction(enum.Enum):
-    EAST    = Point( 1, 0)
-    SOUTH   = Point( 0, 1)
-    WEST    = Point(-1, 0)
-    NORTH   = Point( 0,-1)
+    EAST    = Point( 0, 1)
+    SOUTH   = Point( 1, 0)
+    WEST    = Point( 0,-1)
+    NORTH   = Point(-1, 0)
 
     @classmethod
     def from_string(cls, string: str):

@@ -204,6 +204,62 @@ class Play:
             )
         ]
 
+@dataclasses.dataclass
+class Grid:
+
+    def __init__(self, size):
+        self.size = size
+        self.half = self.size // 2
+        self.middle = Point(self.half, self.half)
+        self.grid = self.create_grid()
+
+    def create_grid(self) -> typing.List[typing.List[typing.Optional[Tile]]]:
+        grid = [[None] * self.size for _ in range(self.size)]
+        grid[self.middle.x][self.middle.y] = Tile(Suit.CASTLE)
+        return grid
+
+
+    def __getitem__(self, point: Point) -> typing.Optional[Tile]:
+        return self.grid[point.x][point.y]
+
+    def __setitem__(self, point: Point, tile: Tile) -> None:
+        self.grid[point.x][point.y] = tile
+
+    def within_bounds(self, point: Point) -> bool:
+        return 0 <= point.x < self.size and 0 <= point.y < self.size
+
+    def tile_at_middle(self) -> Tile:
+        return self.tile_at_point(self.middle)
+
+    def bounded(self):
+        """Returns False if there are any tiles placed outside the grid."""
+        return not any(
+            any(
+                (
+                    self.grid[1][i],
+                    self.grid[self.size - 2][i],
+                    self.grid[i][1],
+                    self.grid[i][self.size - 2],
+                )
+            )
+            for i in range(2,  self.size - 1)
+        )
+
+    def __str__(self):
+        # numbers at top
+        string = " " + "".join(map(str, range(self.size))) + "\n"
+        for i, row in enumerate(self.grid):
+            # number on left + tiles + "\n"
+            string += (
+                str(i)
+                + "".join(
+                    str(tile) if tile else " "
+                    for tile in row
+                )
+                + "\n"
+            )
+        return string
+
 
 @dataclasses.dataclass
 class Board:
@@ -213,15 +269,9 @@ class Board:
     union: unionfind.UnionFind = dataclasses.field(default_factory=unionfind.UnionFind)
 
     def __post_init__(self):
-        self.size = 12 if Rule.MIGHTY_DUEL in self.rules else 9
-        half = self.size // 2
-        self.middle = Point(half, half)
-        self.grid = self.create_grid()
-
-    def create_grid(self) -> typing.List[typing.List[typing.Optional[Tile]]]:
-        grid = [[None] * self.size for _ in range(self.size)]
-        grid[self.middle.x][self.middle.y] = Tile(Suit.CASTLE)
-        return grid
+        self.grid = Grid(
+            12 if Rule.MIGHTY_DUEL in self.rules else 9
+        )
 
     # SCORING
 
@@ -229,7 +279,7 @@ class Board:
         return [
             (
                 sum(
-                    self.grid[point.x][point.y].crowns
+                    self.grid[point].crowns
                     for point in points
                 ),
                 len(points)
@@ -248,30 +298,15 @@ class Board:
         )
 
     def crowns(self):
-        return sum(lambda x: x[1] for x in self.crowns_and_tiles)
+        return sum(crowns for crowns, tiles in self.crowns_and_tiles())
 
     def middle_kingdom_points(self):
         return (
             Points.MIDDLE_KINGDOM
             * int(Rule.MIDDLE_KINGDOM in self.rules)
-            * int(self.kingdom_in_middle())
+            * int(self.grid.bounded())
         )
 
-    def kingdom_in_middle(self):
-        """Returns False if there are any tiles placed outside the grid."""
-        j = 3 if Rule.MIGHTY_DUEL in self.rules else 0
-
-        return not any(
-            any(
-                (
-                    self.grid[1][i],
-                    self.grid[7 + j][i],
-                    self.grid[i][1],
-                    self.grid[i][7 + j],
-                )
-            )
-            for i in range(2, 8 + j)
-        )
 
     def harmony_points(self):
         return (
@@ -299,12 +334,9 @@ class Board:
 
     def _play_within_bounds(self, play: Play) -> bool:
         return (
-            self._within_bounds(play.point)
-            and self._within_bounds(play.point + play.direction)
+            self.grid.within_bounds(play.point)
+            and self.grid.within_bounds(play.point + play.direction)
         )
-
-    def _within_bounds(self, point: Point) -> bool:
-        return 0 <= point.x < self.size and 0 <= point.y < self.size
 
     def _valid_adjacent(self, play: Play) -> bool:
         print(any(
@@ -318,18 +350,20 @@ class Board:
 
     def _valid_connection(self, a: Point, b: Point) -> bool:
         # TODO wtf?
-        if self._tile_at(b) or self._tile_at(b):
+        # We're checking the grid for the matching tile before it's been added.
+        if self.grid[a] and self.grid[b]:
+            return
             pass#print(self._tile_at(b).suit)
         val = None
         try:
             val = any(
                 (
-                    self._tile_at(a).suit == Suit.CASTLE,
-                    self._tile_at(b).suit == Suit.CASTLE,
+                    self.grid[a].suit == Suit.CASTLE,
+                    self.grid[b].suit == Suit.CASTLE,
                     self._matching_suit(a, b),
                 )
             )
-            val = self._tile_at(b).suit == Suit.CASTLE
+            val = self.gird.tile_at_point(b).suit == Suit.CASTLE
         except:
             val = False
         print(val)
@@ -339,20 +373,15 @@ class Board:
         return self._tile_at(x).suit == self._tile_at(y).suit
 
     def _add_to_grid(self, play: Play) -> None:
-        x, y = play.point
-        dx, dy = play.direction
-        self.grid[x][y] = play.domino.left
-        self.grid[x + dx][y + dy] = play.domino.right
+        self.grid.grid[play.point] = play.domino.left
+        self.grid.grid[play.point + play.direction] = play.domino.right
 
     def _unionise(self, play: Play) -> None:
         for a, b in play.adjacent_edges():
-            if self._tile_at(a) is None or self._tile_at(b) is None:
+            if self.grid[a] is None or self.grid[b] is None:
                 continue
             if self._matching_suit(a, b):
                 self.union.join(a, b)
-
-    def _tile_at(self, point):
-        return self.grid[point.x][point.y]
 
     # VALIDATION
 
@@ -388,21 +417,13 @@ class Board:
             for new_point in point.adjacent_points():
                 if not self._within_bounds(new_point):
                     continue
-                if self._tile_at(new_point) is None:
+                if self.grid[new_point] is None:
                     vacant_points.append(new_point)
                 else:
                     queue.append(new_point)
 
         return vacant_points
 
-    def __str__(self):
-        string = " " + "".join(map(str, range(self.size))) + "\n"
-        for i, row in enumerate(self.grid):
-            string += str(i)
-            for tile in row:
-                string += str(tile) if tile else " "
-            string += "\n"
-        return string
 
 
 class Line:

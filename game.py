@@ -257,6 +257,9 @@ class Grid:
         min_y = min(self.min_y, point.y)
         return max_x - min_x < self.size and max_y - min_y < self.size
 
+    def within(self, point: Point) -> bool:
+        return self.within_grid(point) and self.within_bounds(point)
+
     # TODO remove to remove dependancy on play
     def _play_to_points(self, play: Play) -> typing.Tuple[Point]:
         return (play.point, play.point + play.direction)
@@ -411,20 +414,24 @@ class Board:
 
     # VALIDATION
 
-    def valid_plays(self, play: Play) -> typing.Set[Play]:
+    def valid_plays(
+            self,
+            domino: Domino,
+            point: typing.Optional[Point]=None,
+            direction: typing.Optional[Direction]=None
+    ) -> typing.Set[Play]:
         """Returns a list of all valid plays given a Play containing a domino."""
-        assert play.domino is not None
         valid = []
-        directions = (play.direction,) if play.direction else Direction
-        points = (play.point,) if play.point else self._vacant_points()
+        directions = (direction,) if direction else Direction
+        points = (point,) if point else self._vacant_points()
         for point in points:
             for direction in directions:
                 new_play = Play(
-                    domino=play.domino,
+                    domino=domino,
                     point=point,
                     direction=direction
                 )
-                if self._valid_play(new_play):
+                if self.valid_play(new_play):
                     valid.append(new_play)
 
         return valid
@@ -432,22 +439,22 @@ class Board:
     def _vacant_points(self) -> typing.List[Point]:
         vacant_points = []
         seen = set()
-        queue = collections.deque(self.middle)
-        while queue:
+        frontier = collections.deque((self.grid.middle, ))
+        while frontier:
 
-            point = queue.popleft()
+            point = frontier.popleft()
             if point in seen:
                 continue
+            else:
+                seen.add(point)
 
-            seen.add(point)
             for new_point in point.adjacent_points():
-                # doesn't check if it's within the 5x5
-                if not self.grid.within_grid(new_point):
+                if not self.grid.within(new_point):
                     continue
                 if self.grid[new_point] is None:
                     vacant_points.append(new_point)
                 else:
-                    queue.append(new_point)
+                    frontier.append(new_point)
 
         return vacant_points
 
@@ -666,12 +673,11 @@ class Game:
             print(domino)
             while True:
                 try:
-                    output = input("x y direction: ")
-                    if output == "discard":
-                        # TODO make this automatic
+                    if not self.boards[player].valid_plays(domino):
                         self.discards.append(domino)
                         break
-                    x, y, direction = output.split()
+
+                    x, y, direction = input("x y direction: ").split()
                     board.play(
                         Play(
                             domino=domino,
@@ -697,10 +703,13 @@ class Game:
         for i, (name, points) in enumerate(
             sorted(
                 (
-                    (player.name, self.boards[player].points())
+                    (
+                        self.boards[player].points(),
+                        self.boards[player].crowns(),
+                        player.name,
+                    )
                     for player in self.players
                 ),
-                key=lambda x: x[1],
                 reverse=True,
             ),
             start=1

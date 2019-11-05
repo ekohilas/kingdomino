@@ -34,11 +34,16 @@ class Point:
         ]
 
 
-class Color(enum.Flag):
-    BLUE    = enum.auto()
-    GREEN   = enum.auto()
-    RED     = enum.auto()
-    YELLOW  = GREEN | RED
+class Color(enum.Enum):
+    BLUE        = "blue"
+    GREEN       = "light_green"
+    RED         = "red"
+    YELLOW      = "yellow"
+    DARK_GREEN  = "dark_green"
+    GREY        = "light_slate_grey"
+    DARK_GREY   = "grey_0"
+    WHITE       = "white"
+    NONE        = "default"
 
 
 class MaxTurns(enum.IntEnum):
@@ -110,14 +115,14 @@ class Suit(enum.Enum):
 
     def to_color(self) -> str:
         return {
-            Suit.FOREST:    "dark_green",
-            Suit.GRASS:     "light_green",
-            Suit.MINE:      "grey_0",
-            Suit.SWAMP:     "light_slate_grey",
-            Suit.WATER:     "blue",
-            Suit.WHEAT:     "yellow",
-            Suit.CASTLE:    "white",
-            Suit.NONE:      "default",
+            Suit.FOREST:    Color.DARK_GREEN,
+            Suit.GRASS:     Color.GREEN,
+            Suit.MINE:      Color.DARK_GREY,
+            Suit.SWAMP:     Color.GREY,
+            Suit.WATER:     Color.BLUE,
+            Suit.WHEAT:     Color.YELLOW,
+            Suit.CASTLE:    Color.WHITE,
+            Suit.NONE:      Color.NONE,
         }[self]
 
 
@@ -158,7 +163,7 @@ class Tile:
 
         return colored.stylize(
             char,
-            colored.fg("white") + colored.bg(self.suit.to_color())
+            colored.fg("white") + colored.bg(self.suit.to_color().value)
         )
 
 
@@ -183,13 +188,16 @@ class Play:
     point: Point
     direction: Direction
 
-    def adjacent_points(self) -> typing.List[Point]:
+    def left_adjacent_points(self) -> typing.List[Point]:
         return [
-            point for point in (
-                self.point.adjacent_points()
-                + (self.point + self.direction).adjacent_points()
-            )
-            if point not in (self.point, self.point + self.direction)
+            point for point in self.point.adjacent_points()
+            if point != self.point + self.direction
+        ]
+
+    def right_adjacent_points(self) -> typing.List[Point]:
+        return [
+            point for point in (self.point + self.direction).adjacent_points()
+            if point != self.point
         ]
 
     def adjacent_edges(self) -> typing.List[typing.Tuple[Point, Point]]:
@@ -339,48 +347,36 @@ class Board:
         )
 
     def _valid_adjacent(self, play: Play) -> bool:
-        print(any(
-            self._valid_connection(x, y)
-            for x, y in play.adjacent_edges()
-        ))
-        return any(
-            self._valid_connection(x, y)
-            for x, y in play.adjacent_edges()
+        return (
+            any(
+                self._valid_connection(self.grid[point], play.domino.left)
+                for point in play.left_adjacent_points()
+            )
+            or any(
+                self._valid_connection(self.grid[point], play.domino.right)
+                for point in play.right_adjacent_points()
+            )
         )
 
-    def _valid_connection(self, a: Point, b: Point) -> bool:
-        # TODO wtf?
-        # We're checking the grid for the matching tile before it's been added.
-        if self.grid[a] and self.grid[b]:
-            return
-            pass#print(self._tile_at(b).suit)
-        val = None
-        try:
-            val = any(
-                (
-                    self.grid[a].suit == Suit.CASTLE,
-                    self.grid[b].suit == Suit.CASTLE,
-                    self._matching_suit(a, b),
-                )
+    def _valid_connection(self, a: typing.Optional[Tile], b: Tile) -> bool:
+        return a is not None and any(
+            (
+                a.suit == Suit.CASTLE,
+                a.suit == b.suit,
             )
-            val = self.gird.tile_at_point(b).suit == Suit.CASTLE
-        except:
-            val = False
-        print(val)
-        return val
-
-    def _matching_suit(self, x: Point, y: Point) -> bool:
-        return self._tile_at(x).suit == self._tile_at(y).suit
+        )
 
     def _add_to_grid(self, play: Play) -> None:
-        self.grid.grid[play.point] = play.domino.left
-        self.grid.grid[play.point + play.direction] = play.domino.right
+        self.grid[play.point] = play.domino.left
+        self.grid[play.point + play.direction] = play.domino.right
 
     def _unionise(self, play: Play) -> None:
         for a, b in play.adjacent_edges():
-            if self.grid[a] is None or self.grid[b] is None:
+            tile_a = self.grid[a]
+            tile_b = self.grid[b]
+            if tile_a is None or tile_b is None:
                 continue
-            if self._matching_suit(a, b):
+            if tile_a.suit == tile_b.suit:
                 self.union.join(a, b)
 
     # VALIDATION
@@ -415,7 +411,7 @@ class Board:
 
             seen.add(point)
             for new_point in point.adjacent_points():
-                if not self._within_bounds(new_point):
+                if not self.grid.within_bounds(new_point):
                     continue
                 if self.grid[new_point] is None:
                     vacant_points.append(new_point)
@@ -424,6 +420,8 @@ class Board:
 
         return vacant_points
 
+    def __str__(self) -> str:
+        return str(self.grid)
 
 
 class Line:
@@ -452,7 +450,11 @@ class Line:
 
     def __str__(self):
         return "\n".join(
-            f"{' ' if domino.player else i}: {domino}"
+            (
+                colored.stylize(" ", colored.bg(domino.player.color.value))
+                if domino.player else str(i)
+            )
+            + f": {domino}"
             for i, domino in enumerate(self.line)
         )
 
@@ -598,6 +600,8 @@ class Game:
 
     def set_initial_order(self):
         self.order = random.sample(self.players, len(self.players))
+        if Rule.TWO_PLAYERS in self.rules:
+            self.order *= 2
 
     def start(self):
         self.turn_num += 1
@@ -664,9 +668,12 @@ if __name__ == "__main__":
     players = [
         Player(
             name=input(f"Player {i+1} name: "),
-            color=Color(i),
+            color=color
         )
-        for i in range(int(input("How many players? (2/3/4): ")))
+        for i, color in zip(
+            range(int(input("How many players? (2/3/4): "))),
+            Color,
+        )
     ]
 
     game = Game(

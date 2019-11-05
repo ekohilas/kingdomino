@@ -4,21 +4,41 @@ T = typing.TypeVar('T')
 
 class Node:
 
-    def __init__(self, item: typing.Generic[T]):
+    def __init__(
+        self,
+        item: typing.Generic[T],
+        parent: "Node"=None,
+        size: int=1
+    ):
         self.item = item
-        self.parent: "Node" = self
-        self.size: int = 1
+        self.parent = self
+        self.size = size
 
-    def __eq__(self, other: "Node"):
+    def __eq__(self, other: "Node") -> bool:
         return self.item == other.item
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.item)
+
+    def __repr__(self) -> str:
+        if self.parent == self:
+            return f"{self.__class__.__name__}({self.item})"
+        else:
+            return (
+                f"{self.__class__.__name__}("
+                + ", ".join(
+                    f"{key}={value!r}"
+                    for key, value in self.__dict__.items()
+                )
+                + ")"
+            )
 
 class UnionFind:
 
-    def __init__(self):
-        self._nodes = {}
+    def __init__(self, _nodes=None):
+        if _nodes is None:
+            _nodes = {}
+        self._nodes = _nodes
 
     def _to_node(self, item: T) -> Node:
         if item not in self._nodes:
@@ -65,6 +85,13 @@ class UnionFind:
             {node.item for node in nodes}
             for nodes in d.values()
         ]
+    def __str__(self) -> str:
+        return str(self.groups())
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(_nodes={self._nodes!r})"
+
+
 
 
 if __name__ == "__main__":
@@ -74,4 +101,6 @@ if __name__ == "__main__":
     u.join(3, 4)
     for i in range(6):
         print(u.find(i))
-    print(u.unions())
+    print(u.groups())
+    print(u)
+    print(repr(u))

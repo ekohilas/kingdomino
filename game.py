@@ -376,14 +376,14 @@ class Board:
         )
 
     def _play_within_bounds(self, play: Play) -> bool:
+        print(id(play), play.point, play.point + play.direction)
         return (
-            self.grid.within_bounds(play.point)
-            and self.grid.within_bounds(play.point + play.direction)
-            and self.grid.within_grid(play.point)
-            and self.grid.within_grid(play.point + play.direction)
+            self.grid.within(play.point)
+            and self.grid.within(play.point + play.direction)
         )
 
     def _valid_adjacent(self, play: Play) -> bool:
+        print(id(play), play.point)
         return (
             any(
                 self._valid_connection(self.grid[point], play.domino.left)
@@ -725,7 +725,7 @@ def split_stream(func, filename):
         return output
     return wrapper
 
-record = False
+record = True
 if record:
     input = split_stream(input, "3.in")
 

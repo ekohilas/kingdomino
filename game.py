@@ -8,6 +8,10 @@ import unionfind
 import collections
 import colored
 
+# TODO
+# check that the input is within the 5x5 grid
+# handle discards
+
 class InvalidPlay(ValueError):
     pass
 
@@ -47,14 +51,18 @@ class Color(enum.Enum):
 
 
 class MaxTurns(enum.IntEnum):
-    DYNASTY         = 3
-    STANDARD        = 6
-    MIGHTY_DUEL     = 12
+    STANDARD    = 12
+    MIGHTY_DUEL = 24
 
 
 class DrawNum(enum.IntEnum):
     THREE   = 3
     FOUR    = 4
+
+
+class GridSize(enum.IntEnum):
+    STANDARD    = 5
+    MIGHTY_DUEL = 7
 
 
 class Points(enum.IntEnum):
@@ -217,29 +225,49 @@ class Grid:
 
     def __init__(self, size):
         self.size = size
-        self.half = self.size // 2
+        self.max_size = size * 2 - 1
+        self.half = size - 1
         self.middle = Point(self.half, self.half)
-        self.grid = self.create_grid()
 
-    def create_grid(self) -> typing.List[typing.List[typing.Optional[Tile]]]:
-        grid = [[None] * self.size for _ in range(self.size)]
-        grid[self.middle.x][self.middle.y] = Tile(Suit.CASTLE)
-        return grid
+        self.grid = [[None] * self.max_size for _ in range(self.max_size)]
+        self.grid[self.middle.x][self.middle.y] = Tile(Suit.CASTLE)
 
+        self.max_x = self.half
+        self.max_y = self.half
+        self.min_x = self.half
+        self.min_y = self.half
 
     def __getitem__(self, point: Point) -> typing.Optional[Tile]:
         return self.grid[point.x][point.y]
 
     def __setitem__(self, point: Point, tile: Tile) -> None:
+        self.max_x = max(self.max_x, point.x)
+        self.max_y = max(self.max_y, point.y)
+        self.min_x = min(self.min_x, point.x)
+        self.min_y = min(self.min_y, point.y)
         self.grid[point.x][point.y] = tile
 
+    def within_grid(self, point: Point) -> bool:
+        return 0 <= point.x < self.max_size and 0 <= point.y < self.max_size
+
     def within_bounds(self, point: Point) -> bool:
-        return 0 <= point.x < self.size and 0 <= point.y < self.size
+        max_x = max(self.max_x, point.x)
+        max_y = max(self.max_y, point.y)
+        min_x = min(self.min_x, point.x)
+        min_y = min(self.min_y, point.y)
+        return max_x - min_x < self.size and max_y - min_y < self.size
 
-    def tile_at_middle(self) -> Tile:
-        return self.tile_at_point(self.middle)
+    # TODO remove to remove dependancy on play
+    def _play_to_points(self, play: Play) -> typing.Tuple[Point]:
+        return (play.point, play.point + play.direction)
 
-    def bounded(self):
+    def add(self, play: Play) -> None:
+        left, right = self._play_to_points(play)
+        self[left] = play.domino.left
+        self[right] = play.domino.right
+
+
+    def bounded(self) -> bool:
         """Returns False if there are any tiles placed outside the grid."""
         return not any(
             any(
@@ -250,23 +278,25 @@ class Grid:
                     self.grid[i][self.size - 2],
                 )
             )
-            for i in range(2,  self.size - 1)
+            for i in range(2,  self.max_size - 1)
         )
 
     def __str__(self):
-        # numbers at top
-        string = " " + "".join(map(str, range(self.size))) + "\n"
-        for i, row in enumerate(self.grid):
-            # number on left + tiles + "\n"
-            string += (
-                str(i)
-                + "".join(
-                    str(tile) if tile else " "
-                    for tile in row
-                )
-                + "\n"
+        return "".join(
+            (
+                " ",
+                "".join(map(str, range(self.max_size))),
+                "\n",
+                "\n".join(
+                    str(i)
+                    + "".join(
+                        str(tile) if tile else " "
+                        for tile in row
+                    )
+                    for i, row in enumerate(self.grid)
+                ),
             )
-        return string
+        )
 
 
 @dataclasses.dataclass
@@ -278,7 +308,9 @@ class Board:
 
     def __post_init__(self):
         self.grid = Grid(
-            12 if Rule.MIGHTY_DUEL in self.rules else 9
+            GridSize.MIGHTY_DUEL
+            if Rule.MIGHTY_DUEL in self.rules
+            else GridSize.STANDARD
         )
 
     # SCORING
@@ -329,7 +361,7 @@ class Board:
         if not self.valid_play(play):
             raise InvalidPlay
 
-        self._add_to_grid(play)
+        self.grid.add(play)
         self._unionise(play)
 
     def valid_play(self, play: Play):
@@ -344,6 +376,8 @@ class Board:
         return (
             self.grid.within_bounds(play.point)
             and self.grid.within_bounds(play.point + play.direction)
+            and self.grid.within_grid(play.point)
+            and self.grid.within_grid(play.point + play.direction)
         )
 
     def _valid_adjacent(self, play: Play) -> bool:
@@ -365,10 +399,6 @@ class Board:
                 a.suit == b.suit,
             )
         )
-
-    def _add_to_grid(self, play: Play) -> None:
-        self.grid[play.point] = play.domino.left
-        self.grid[play.point + play.direction] = play.domino.right
 
     def _unionise(self, play: Play) -> None:
         for a, b in play.adjacent_edges():
@@ -411,7 +441,8 @@ class Board:
 
             seen.add(point)
             for new_point in point.adjacent_points():
-                if not self.grid.within_bounds(new_point):
+                # doesn't check if it's within the 5x5
+                if not self.grid.within_grid(new_point):
                     continue
                 if self.grid[new_point] is None:
                     vacant_points.append(new_point)
@@ -576,9 +607,7 @@ class Game:
             self.rules |= rules
 
     def max_turns(self):
-        if Rule.DYNASTY in self.rules:
-            return MaxTurns.DYNASTY
-        elif Rule.MIGHTY_DUEL in self.rules:
+        if Rule.MIGHTY_DUEL in self.rules:
             return MaxTurns.MIGHTY_DUEL
         else:
             return MaxTurns.STANDARD
@@ -614,11 +643,18 @@ class Game:
 
     def select(self):
         while self.order:
+            player = self.order.pop(0)
             print(self.line)
-            self.line.choose(
-                self.order.pop(0),
-                int(input(f"> ")),
-            )
+            while True:
+                try:
+                    self.line.choose(
+                        player,
+                        int(input(f"{player.name}: ")),
+                    )
+                except (InvalidPlay, ValueError):
+                    continue
+                else:
+                    break
 
     def place(self):
         while not self.line.empty():
@@ -627,18 +663,31 @@ class Game:
             board = self.boards[player]
 
             print(board)
-            x, y, direction = input("x y direction: ").split()
-            board.play(
-                Play(
-                    domino=domino,
-                    point=Point(int(x), int(y)),
-                    direction=Direction.from_string(direction),
-                )
-            )
+            print(domino)
+            while True:
+                try:
+                    output = input("x y direction: ")
+                    if output == "discard":
+                        # TODO make this automatic
+                        self.discards.append(domino)
+                        break
+                    x, y, direction = output.split()
+                    board.play(
+                        Play(
+                            domino=domino,
+                            point=Point(int(x), int(y)),
+                            direction=Direction.from_string(direction),
+                        )
+                    )
+                except InvalidPlay:
+                    continue
+                else:
+                    break
+
             self.order.append(player)
 
     def turn(self):
-        print(f"Turn {self.turn_num}")
+        print(f"Turn {self.turn_num}/{self.max_turns()}")
         self.draw()
         self.select()
         self.place()
@@ -657,13 +706,27 @@ class Game:
             start=1
         ):
             print(f"{i}. {name}: {points}")
+            print(self.boards[player])
 
+def split_stream(func, filename):
+    def wrapper(*args, **kwargs):
+        with open(filename, "a") as f:
+            output = func(*args, **kwargs)
+            print(output, file=f)
+        return output
+    return wrapper
+
+record = False
+if record:
+    input = split_stream(input, "3.in")
 
 if __name__ == "__main__":
 
     filename = "kingdomino.json"
 
     dominoes = Dominoes.from_json(filename)
+
+    random.seed(0)
 
     players = [
         Player(

@@ -376,22 +376,22 @@ class Board:
         )
 
     def _play_within_bounds(self, play: Play) -> bool:
-        print(id(play), play.point, play.point + play.direction)
         return (
             self.grid.within(play.point)
             and self.grid.within(play.point + play.direction)
         )
 
     def _valid_adjacent(self, play: Play) -> bool:
-        print(id(play), play.point)
         return (
             any(
                 self._valid_connection(self.grid[point], play.domino.left)
                 for point in play.left_adjacent_points()
+                if self.grid.within(point)
             )
             or any(
                 self._valid_connection(self.grid[point], play.domino.right)
                 for point in play.right_adjacent_points()
+                if self.grid.within(point)
             )
         )
 
@@ -673,10 +673,11 @@ class Game:
             print(domino)
             while True:
                 try:
-                    if not self.boards[player].valid_plays(domino):
+                    plays = self.boards[player].valid_plays(domino)
+                    if not plays:
                         self.discards.append(domino)
                         break
-
+                    print(plays)
                     x, y, direction = input("x y direction: ").split()
                     board.play(
                         Play(
@@ -700,13 +701,13 @@ class Game:
         self.turn_num += 1
 
     def final_score(self):
-        for i, (name, points) in enumerate(
+        for i, (points, crowns, player) in enumerate(
             sorted(
                 (
                     (
                         self.boards[player].points(),
                         self.boards[player].crowns(),
-                        player.name,
+                        player,
                     )
                     for player in self.players
                 ),
@@ -714,7 +715,7 @@ class Game:
             ),
             start=1
         ):
-            print(f"{i}. {name}: {points}")
+            print(f"{i}. {player.name}: {points}")
             print(self.boards[player])
 
 def split_stream(func, filename):
@@ -725,7 +726,7 @@ def split_stream(func, filename):
         return output
     return wrapper
 
-record = True
+record = False
 if record:
     input = split_stream(input, "3.in")
 

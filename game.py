@@ -7,10 +7,10 @@ import json
 import unionfind
 import collections
 import colored
+import sys
 
 # TODO
 # check that the input is within the 5x5 grid
-# handle discards
 
 class InvalidPlay(ValueError):
     pass
@@ -51,6 +51,7 @@ class Color(enum.Enum):
 
 
 class MaxTurns(enum.IntEnum):
+    TWO_PLAYERS = 6
     STANDARD    = 12
     MIGHTY_DUEL = 24
 
@@ -98,7 +99,6 @@ class Suit(enum.Enum):
     WHEAT   = enum.auto()
     CASTLE  = enum.auto()
     NONE    = enum.auto()
-
 
     @classmethod
     def from_string(cls, string: str):
@@ -194,13 +194,11 @@ class Domino:
     number: int
     left: Tile
     right: Tile
-    direction: Direction = Direction.EAST
 
     def __str__(self):
         return f"{self.left}{self.right}"
 
 
-@dataclasses.dataclass(unsafe_hash=True)
 class Play:
 
     def __init__(
@@ -237,6 +235,27 @@ class Play:
                 (self.point + self.direction, self.point),
             )
         ]
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Play):
+            raise NotImplementedError
+        return (
+            self.domino == other.domino
+            and (
+                (
+                    self.point == other.point
+                    and self.direction == other.direction
+                )
+                or
+                (
+                    self.point == other.point + other.direction
+                    and self.direction == Direction.opposite(other.direction)
+                )
+            )
+        )
+
+    def __hash__(self):
+        return hash((self.domino, self.point, self.direction))
 
     @classmethod
     def flipped(cls, play):
@@ -313,7 +332,7 @@ class Grid:
     def __str__(self):
         return "".join(
             (
-                "\n ",
+                "\n↓",
                 "".join(map(str, range(self.max_size))),
                 "\n",
                 "\n".join(
@@ -658,9 +677,8 @@ class Game:
         )
 
         self.boards = {
-            player: Board(
-                rules=self.rules
-            ) for player in self.players
+            player: Board(rules=self.rules)
+            for player in self.players
         }
 
         self.set_initial_order()
@@ -671,13 +689,18 @@ class Game:
             self.rules |= rules
 
     def max_turns(self):
-        if Rule.MIGHTY_DUEL in self.rules:
+        if Rule.TWO_PLAYERS in self.rules:
+            return MaxTurns.TWO_PLAYERS
+        elif Rule.MIGHTY_DUEL in self.rules:
             return MaxTurns.MIGHTY_DUEL
         else:
             return MaxTurns.STANDARD
 
     def deck_size(self):
-        return self.max_turns() * len(self.players)
+        turns = self.max_turns() * len(self.players)
+        if Rule.TWO_PLAYERS in self.rules:
+            turns *= 2
+        return turns
 
     def num_to_draw(self):
         if Rule.THREE_PLAYERS in self.rules:
@@ -709,6 +732,7 @@ class Game:
         while self.order:
             player = self.order.pop(0)
             print(self.line)
+            print(self.boards[player])
             while True:
                 try:
                     self.line.choose(
@@ -782,11 +806,11 @@ def split_stream(func, filename):
         return output
     return wrapper
 
-record = False
-if record:
-    input = split_stream(input, "3.in")
 
 if __name__ == "__main__":
+
+    if len(sys.argv) == 2:
+        input = split_stream(input, sys.argv[1])
 
     filename = "kingdomino.json"
 

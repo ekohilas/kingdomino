@@ -175,7 +175,7 @@ class Tile:
         )
 
 
-@dataclasses.dataclass(order=True)
+@dataclasses.dataclass(order=True, unsafe_hash=True)
 class Domino:
     number: int
     left: Tile
@@ -183,14 +183,11 @@ class Domino:
     direction: Direction = Direction.EAST
     player: Player = None
 
-    def flip(self):
-        self.left, self.right = self.right, self.left
-
     def __str__(self):
         return f"{self.left}{self.right}"
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Play:
     domino: Domino
     point: Point
@@ -219,6 +216,22 @@ class Play:
                 (self.point + self.direction, self.point),
             )
         ]
+
+    @classmethod
+    def flipped(cls, play):
+        return cls(
+            domino=play.domino,
+            point=play.point + play.direction,
+            direction={
+                Direction.EAST:     Direction.WEST,
+                Direction.SOUTH:    Direction.NORTH,
+                Direction.WEST:     Direction.EAST,
+                Direction.NORTH:    Direction.SOUTH,
+            }[play.direction],
+        )
+
+    def __repr__(self):
+        return f"{self.point.x} {self.point.y} {self.direction.name}"
 
 @dataclasses.dataclass
 class Grid:
@@ -287,7 +300,7 @@ class Grid:
     def __str__(self):
         return "".join(
             (
-                " ",
+                "\n ",
                 "".join(map(str, range(self.max_size))),
                 "\n",
                 "\n".join(
@@ -315,6 +328,7 @@ class Board:
             if Rule.MIGHTY_DUEL in self.rules
             else GridSize.STANDARD
         )
+        self.discards = []
 
     # SCORING
 
@@ -370,9 +384,16 @@ class Board:
     def valid_play(self, play: Play):
         return all(
             (
+                self._vacant(play),
                 self._play_within_bounds(play),
                 self._valid_adjacent(play),
             )
+        )
+
+    def _vacant(self, play: Play) -> bool:
+        return (
+            self.grid[play.point] is None
+            and self.grid[play.point + play.direction] is None
         )
 
     def _play_within_bounds(self, play: Play) -> bool:
@@ -421,7 +442,7 @@ class Board:
             direction: typing.Optional[Direction]=None
     ) -> typing.Set[Play]:
         """Returns a list of all valid plays given a Play containing a domino."""
-        valid = []
+        valid = set()
         directions = (direction,) if direction else Direction
         points = (point,) if point else self._vacant_points()
         for point in points:
@@ -432,7 +453,10 @@ class Board:
                     direction=direction
                 )
                 if self.valid_play(new_play):
-                    valid.append(new_play)
+                    valid.add(new_play)
+                flipped = Play.flipped(new_play)
+                if self.valid_play(flipped):
+                    valid.add(flipped)
 
         return valid
 
@@ -673,9 +697,9 @@ class Game:
             print(domino)
             while True:
                 try:
-                    plays = self.boards[player].valid_plays(domino)
+                    plays = board.valid_plays(domino)
                     if not plays:
-                        self.discards.append(domino)
+                        board.discards.append(domino)
                         break
                     print(plays)
                     x, y, direction = input("x y direction: ").split()

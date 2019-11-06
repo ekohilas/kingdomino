@@ -144,10 +144,24 @@ class Direction(enum.Enum):
     def from_string(cls, string: str):
         return {
             "east":     cls.EAST,
+            "e":        cls.EAST,
             "south":    cls.SOUTH,
+            "s":        cls.SOUTH,
             "west":     cls.WEST,
+            "w":        cls.WEST,
             "north":    cls.NORTH,
+            "n":        cls.NORTH,
         }[string]
+
+
+    @classmethod
+    def opposite(cls, direction):
+        return {
+            cls.EAST:   cls.WEST,
+            cls.SOUTH:  cls.NORTH,
+            cls.WEST:   cls.EAST,
+            cls.NORTH:  cls.SOUTH,
+        }[direction]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -175,24 +189,30 @@ class Tile:
         )
 
 
-@dataclasses.dataclass(order=True, unsafe_hash=True)
+@dataclasses.dataclass(order=True, frozen=True)
 class Domino:
     number: int
     left: Tile
     right: Tile
     direction: Direction = Direction.EAST
-    # refactor this
-    player: typing.Optional[Player] = None
 
     def __str__(self):
         return f"{self.left}{self.right}"
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(unsafe_hash=True)
 class Play:
-    domino: Domino
-    point: Point
-    direction: Direction
+
+    def __init__(
+        self,
+        domino: Domino,
+        point: Point,
+        direction: Direction,
+    ):
+        self.domino = domino
+        self.point = point
+        self.direction = direction
+        self.points = (self.point, self.point + self.direction)
 
     def left_adjacent_points(self) -> typing.List[Point]:
         return [
@@ -223,74 +243,58 @@ class Play:
         return cls(
             domino=play.domino,
             point=play.point + play.direction,
-            direction={
-                Direction.EAST:     Direction.WEST,
-                Direction.SOUTH:    Direction.NORTH,
-                Direction.WEST:     Direction.EAST,
-                Direction.NORTH:    Direction.SOUTH,
-            }[play.direction],
+            direction=Direction.opposite(play.direction)
         )
 
     def __repr__(self):
         return f"{self.point.x} {self.point.y} {self.direction.name}"
 
-@dataclasses.dataclass
 class Grid:
 
     def __init__(self, size):
         self.size = size
         self.max_size = size * 2 - 1
-        self.half = size - 1
-        self.middle = Point(self.half, self.half)
+        half = size - 1
+        self.middle = Point(half, half)
 
         self.grid = [[None] * self.max_size for _ in range(self.max_size)]
-        self.grid[self.middle.x][self.middle.y] = Tile(Suit.CASTLE)
+        self.grid[half][half] = Tile(Suit.CASTLE)
 
-        self.max_x = self.half
-        self.max_y = self.half
-        self.min_x = self.half
-        self.min_y = self.half
+        self.max_x = half
+        self.max_y = half
+        self.min_x = half
+        self.min_y = half
 
     def __getitem__(self, point: Point) -> typing.Optional[Tile]:
         return self.grid[point.x][point.y]
 
     def __setitem__(self, point: Point, tile: Tile) -> None:
         a, b = self.min_max(point)
-        self.max_x, self.max_y = a
-        self.min_x, self.min_y = b
+        self.min_x, self.min_y = a
+        self.max_x, self.max_y = b
         self.grid[point.x][point.y] = tile
 
     def min_max(self, point: Point) -> typing.Tuple[
             typing.Tuple[int, int],
             typing.Tuple[int, int],
     ]:
-        max_x = max(self.max_x, point.x)
-        max_y = max(self.max_y, point.y)
         min_x = min(self.min_x, point.x)
         min_y = min(self.min_y, point.y)
-        return ((max_x, max_y), (min_x, min_y))
+        max_x = max(self.max_x, point.x)
+        max_y = max(self.max_y, point.y)
+        return ((min_x, min_y), (max_x, max_y))
 
     def within_grid(self, point: Point) -> bool:
         return 0 <= point.x < self.max_size and 0 <= point.y < self.max_size
 
     def within_bounds(self, point: Point) -> bool:
         a, b = self.min_max(point)
-        max_x, max_y = a
-        min_x, min_y = b
+        min_x, min_y = a
+        max_x, max_y = b
         return max_x - min_x < self.size and max_y - min_y < self.size
 
     def within(self, point: Point) -> bool:
         return self.within_grid(point) and self.within_bounds(point)
-
-    # TODO remove to remove dependancy on play
-    def _play_to_points(self, play: Play) -> typing.Tuple[Point, Point]:
-        return (play.point, play.point + play.direction)
-
-    def add(self, play: Play) -> None:
-        left, right = self._play_to_points(play)
-        self[left] = play.domino.left
-        self[right] = play.domino.right
-
 
     def bounded(self) -> bool:
         """Returns False if there are any tiles placed outside the grid."""
@@ -324,14 +328,24 @@ class Grid:
         )
 
 
-@dataclasses.dataclass
 class Board:
-    rules: Rule
-    discards: typing.List[Domino] = dataclasses.field(default_factory=list)
-    playable: typing.List[Tile] = dataclasses.field(default_factory=list)
-    union: unionfind.UnionFind = dataclasses.field(default_factory=unionfind.UnionFind)
 
-    def __post_init__(self):
+    def __init__(
+        self,
+        rules: Rule,
+        discards: typing.List[Domino]=None,
+        union: unionfind.UnionFind=None,
+    ):
+        self.rules = rules
+
+        if discards is None:
+            discards = []
+        self.discards = discards
+
+        if union is None:
+            union = unionfind.UnionFind()
+        self.union = union
+
         self.grid = Grid(
             GridSize.MIGHTY_DUEL
             if Rule.MIGHTY_DUEL in self.rules
@@ -382,11 +396,14 @@ class Board:
 
     # PLAY VALIDATION
 
+    def discard(self, domino: Domino) -> None:
+        self.discards.append(domino)
+
     def play(self, play: Play):
         if not self.valid_play(play):
             raise InvalidPlay
 
-        self.grid.add(play)
+        self.add_to_grid(play)
         self._unionise(play)
 
     def valid_play(self, play: Play):
@@ -399,15 +416,15 @@ class Board:
         )
 
     def _vacant(self, play: Play) -> bool:
-        return (
-            self.grid[play.point] is None
-            and self.grid[play.point + play.direction] is None
+        return all(
+            self.grid[point] is None
+            for point in play.points
         )
 
     def _play_within_bounds(self, play: Play) -> bool:
-        return (
-            self.grid.within(play.point)
-            and self.grid.within(play.point + play.direction)
+        return all(
+            self.grid.within(point)
+            for point in play.points
         )
 
     def _valid_adjacent(self, play: Play) -> bool:
@@ -431,6 +448,11 @@ class Board:
                 a.suit == b.suit,
             )
         )
+
+    def add_to_grid(self, play):
+        left, right = play.points
+        self.grid[left] = play.domino.left
+        self.grid[right] = play.domino.right
 
     def _unionise(self, play: Play) -> None:
         for a, b in play.adjacent_edges():
@@ -500,7 +522,10 @@ class Line:
         self,
         dominos: typing.List[Domino]
     ):
-        self.line = sorted(dominos)
+        self.line = [
+            [None, domino]
+            for domino in sorted(dominos)
+        ]
 
     def pop(self) -> Domino:
         return self.line.pop(0)
@@ -517,16 +542,16 @@ class Line:
         # refactor
         if domino:
             index = self.line.index(domino)
-        self.line[index].player = player
+        self.line[index][0] = player
 
     def __str__(self):
         return "\n".join(
             (
-                colored.stylize(" ", colored.bg(domino.player.color.value))
-                if domino.player else str(i)
+                colored.stylize(" ", colored.bg(player.color.value))
+                if player else str(i)
             )
             + f": {domino}"
-            for i, domino in enumerate(self.line)
+            for i, (player, domino) in enumerate(self.line)
         )
 
 
@@ -697,8 +722,7 @@ class Game:
 
     def place(self):
         while not self.line.empty():
-            domino = self.line.pop()
-            player = domino.player
+            player, domino = self.line.pop()
             board = self.boards[player]
 
             print(board)
@@ -707,7 +731,7 @@ class Game:
                 try:
                     plays = board.valid_plays(domino)
                     if not plays:
-                        board.discards.append(domino)
+                        board.discard(domino)
                         break
                     print(plays)
                     x, y, direction = input("x y direction: ").split()

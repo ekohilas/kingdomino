@@ -121,7 +121,7 @@ class Suit(enum.Enum):
             Suit.WHEAT:     "wheat",
         }[self]
 
-    def to_color(self) -> str:
+    def to_color(self) -> Color:
         return {
             Suit.FOREST:    Color.DARK_GREEN,
             Suit.GRASS:     Color.GREEN,
@@ -181,7 +181,8 @@ class Domino:
     left: Tile
     right: Tile
     direction: Direction = Direction.EAST
-    player: Player = None
+    # refactor this
+    player: typing.Optional[Player] = None
 
     def __str__(self):
         return f"{self.left}{self.right}"
@@ -254,27 +255,35 @@ class Grid:
         return self.grid[point.x][point.y]
 
     def __setitem__(self, point: Point, tile: Tile) -> None:
-        self.max_x = max(self.max_x, point.x)
-        self.max_y = max(self.max_y, point.y)
-        self.min_x = min(self.min_x, point.x)
-        self.min_y = min(self.min_y, point.y)
+        a, b = self.min_max(point)
+        self.max_x, self.max_y = a
+        self.min_x, self.min_y = b
         self.grid[point.x][point.y] = tile
+
+    def min_max(self, point: Point) -> typing.Tuple[
+            typing.Tuple[int, int],
+            typing.Tuple[int, int],
+    ]:
+        max_x = max(self.max_x, point.x)
+        max_y = max(self.max_y, point.y)
+        min_x = min(self.min_x, point.x)
+        min_y = min(self.min_y, point.y)
+        return ((max_x, max_y), (min_x, min_y))
 
     def within_grid(self, point: Point) -> bool:
         return 0 <= point.x < self.max_size and 0 <= point.y < self.max_size
 
     def within_bounds(self, point: Point) -> bool:
-        max_x = max(self.max_x, point.x)
-        max_y = max(self.max_y, point.y)
-        min_x = min(self.min_x, point.x)
-        min_y = min(self.min_y, point.y)
+        a, b = self.min_max(point)
+        max_x, max_y = a
+        min_x, min_y = b
         return max_x - min_x < self.size and max_y - min_y < self.size
 
     def within(self, point: Point) -> bool:
         return self.within_grid(point) and self.within_bounds(point)
 
     # TODO remove to remove dependancy on play
-    def _play_to_points(self, play: Play) -> typing.Tuple[Point]:
+    def _play_to_points(self, play: Play) -> typing.Tuple[Point, Point]:
         return (play.point, play.point + play.direction)
 
     def add(self, play: Play) -> None:
@@ -328,7 +337,6 @@ class Board:
             if Rule.MIGHTY_DUEL in self.rules
             else GridSize.STANDARD
         )
-        self.discards = []
 
     # SCORING
 
@@ -462,7 +470,7 @@ class Board:
 
     def _vacant_points(self) -> typing.List[Point]:
         vacant_points = []
-        seen = set()
+        seen: set = set()
         frontier = collections.deque((self.grid.middle, ))
         while frontier:
 
@@ -506,6 +514,7 @@ class Line:
         index: int=None,
         domino: Domino=None,
     ) -> None:
+        # refactor
         if domino:
             index = self.line.index(domino)
         self.line[index].player = player
@@ -523,7 +532,6 @@ class Line:
 
 class Dominoes(list):
 
-    @staticmethod
     def to_dict(self) -> typing.List[
         typing.Dict[
             str,
@@ -595,7 +603,7 @@ class Deck:
         return not bool(self.deck)
 
     def draw(self):
-        """Returns n dominos from the shuffled deck, sorted by their numbers"""
+        """Returns n dominos from the shuffled deck."""
         return [
             self.deck.pop()
             for _ in range(self.draw_num)

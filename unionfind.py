@@ -14,7 +14,9 @@ class Node:
         self.parent = self
         self.size = size
 
-    def __eq__(self, other: "Node") -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Node):
+            raise NotImplementedError
         return self.item == other.item
 
     def __hash__(self) -> int:
@@ -72,7 +74,7 @@ class UnionFind:
         root_y.parent = root_x
         root_x.size += root_y.size
 
-    def groups(self) -> typing.Set[T]:
+    def groups(self) -> typing.FrozenSet[typing.FrozenSet[T]]:
 
         d = {}
         for node in self._nodes.values():
@@ -81,10 +83,10 @@ class UnionFind:
                 d[root] = set()
             d[root].add(node)
 
-        return [
-            {node.item for node in nodes}
+        return frozenset(
+            frozenset(node.item for node in nodes)
             for nodes in d.values()
-        ]
+        )
     def __str__(self) -> str:
         return str(self.groups())
 

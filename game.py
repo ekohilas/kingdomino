@@ -1,12 +1,12 @@
-import random
-import typing
+import collections
+import colored # type: ignore
 import csv
 import enum
 import json
-import unionfind
-import collections
-import colored # type: ignore
+import random
 import sys
+import typing
+import unionfind
 
 # TODO
 # check that the input is within the 5x5 grid
@@ -34,7 +34,7 @@ class Point(typing.NamedTuple):
         ]
 
 
-class Color(enum.Enum):
+class TermColor(enum.Enum):
     BLUE        = "blue"
     GREEN       = "light_green"
     RED         = "red"
@@ -62,7 +62,7 @@ class GridSize(enum.IntEnum):
     MIGHTY_DUEL = 7
 
 
-class Points(enum.IntEnum):
+class BonusPoints(enum.IntEnum):
     HARMONY         = 5
     MIDDLE_KINGDOM  = 10
 
@@ -117,16 +117,16 @@ class Suit(enum.Enum):
             Suit.WHEAT:     "wheat",
         }[self]
 
-    def to_color(self) -> Color:
+    def to_color(self) -> TermColor:
         return {
-            Suit.FOREST:    Color.DARK_GREEN,
-            Suit.GRASS:     Color.GREEN,
-            Suit.MINE:      Color.DARK_GREY,
-            Suit.SWAMP:     Color.GREY,
-            Suit.WATER:     Color.BLUE,
-            Suit.WHEAT:     Color.YELLOW,
-            Suit.CASTLE:    Color.WHITE,
-            Suit.NONE:      Color.NONE,
+            Suit.FOREST:    TermColor.DARK_GREEN,
+            Suit.GRASS:     TermColor.GREEN,
+            Suit.MINE:      TermColor.DARK_GREY,
+            Suit.SWAMP:     TermColor.GREY,
+            Suit.WATER:     TermColor.BLUE,
+            Suit.WHEAT:     TermColor.YELLOW,
+            Suit.CASTLE:    TermColor.WHITE,
+            Suit.NONE:      TermColor.NONE,
         }[self]
 
 
@@ -162,14 +162,23 @@ class Direction(Point, enum.Enum):
 
 class Player(typing.NamedTuple):
     name: str
-    color: Color
+    color: TermColor
 
 
 class Tile(typing.NamedTuple):
     suit: Suit
     crowns: int = 0
 
-    def __str__(self):
+    def valid_connection(self, tile: typing.Optional["Tile"]) -> bool:
+        return tile is not None and any(
+            (
+                tile.suit == Suit.CASTLE,
+                tile.suit == self.suit,
+            )
+        )
+
+
+    def __str__(self) -> str:
         if self.suit == Suit.CASTLE:
             char = "C"
         elif self.crowns == 0:
@@ -229,6 +238,7 @@ class Play:
             )
         ]
 
+    # Can be refactored
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Play):
             raise NotImplementedError
@@ -299,7 +309,7 @@ class Grid:
         max_x, max_y = self.max(point)
         return max_x - min_x < self.size and max_y - min_y < self.size
 
-    def within(self, point: Point) -> bool:
+    def within_grid_and_bounds(self, point: Point) -> bool:
         return self.within_grid(point) and self.within_bounds(point)
 
     def bounded(self) -> bool:
@@ -387,7 +397,7 @@ class Board:
 
     def middle_kingdom_points(self):
         return (
-            Points.MIDDLE_KINGDOM
+            BonusPoints.MIDDLE_KINGDOM
             * int(Rule.MIDDLE_KINGDOM in self.rules)
             * int(self.grid.bounded())
         )
@@ -395,7 +405,7 @@ class Board:
 
     def harmony_points(self):
         return (
-            Points.HARMONY
+            BonusPoints.HARMONY
             * int(Rule.HARMONY in self.rules)
             * int(not self.discards)
         )
@@ -429,44 +439,36 @@ class Board:
 
     def _play_within_bounds(self, play: Play) -> bool:
         return all(
-            self.grid.within(point)
+            self.grid.within_grid_and_bounds(point)
             for point in play.points
         )
 
     def _valid_adjacent(self, play: Play) -> bool:
         return (
             any(
-                self._valid_connection(self.grid[point], play.domino.left)
+                play.domino.left.valid_connection(self.grid[point])
                 for point in play.left_adjacent_points()
-                if self.grid.within(point)
+                if self.grid.within_grid_and_bounds(point)
             )
             or any(
-                self._valid_connection(self.grid[point], play.domino.right)
+                play.domino.right.valid_connection(self.grid[point])
                 for point in play.right_adjacent_points()
-                if self.grid.within(point)
+                if self.grid.within_grid_and_bounds(point)
             )
         )
 
-    def _valid_connection(self, a: typing.Optional[Tile], b: Tile) -> bool:
-        return a is not None and any(
-            (
-                a.suit == Suit.CASTLE,
-                a.suit == b.suit,
-            )
-        )
-
-    def add_to_grid(self, play):
+    def add_to_grid(self, play: Play) -> None:
         left, right = play.points
         self.grid[left] = play.domino.left
         self.grid[right] = play.domino.right
 
     def _unionise(self, play: Play) -> None:
         for a, b in play.adjacent_edges():
-            tile_a = self.grid[a]
-            tile_b = self.grid[b]
-            if tile_a is None or tile_b is None:
+            domino_tile = self.grid[a]
+            grid_tile = self.grid[b]
+            if grid_tile is None:
                 continue
-            if tile_a.suit == tile_b.suit:
+            if domino_tile.suit == grid_tile.suit:
                 self.union.join(a, b)
 
     # VALIDATION
@@ -509,7 +511,7 @@ class Board:
                 seen.add(point)
 
             for new_point in point.adjacent_points():
-                if not self.grid.within(new_point):
+                if not self.grid.within_grid_and_bounds(new_point):
                     continue
                 if self.grid[new_point] is None:
                     vacant_points.append(new_point)
@@ -811,7 +813,7 @@ if __name__ == "__main__":
         )
         for i, color in zip(
             range(int(input("How many players? (2/3/4): "))),
-            Color,
+            TermColor,
         )
     ]
 

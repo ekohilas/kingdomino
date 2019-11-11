@@ -1,12 +1,11 @@
 import random
 import typing
-import dataclasses
 import csv
 import enum
 import json
 import unionfind
 import collections
-import colored
+import colored # type: ignore
 import sys
 
 # TODO
@@ -15,14 +14,11 @@ import sys
 class InvalidPlay(ValueError):
     pass
 
-@dataclasses.dataclass(frozen=True)
-class Point:
+class Point(typing.NamedTuple):
     x: int
     y: int
 
     def __add__(self, other):
-        if isinstance(other, Direction):
-            other = other.value
         return Point(self.x + other.x, self.y + other.y)
 
     def adjacent_points(self) -> typing.List["Point"]:
@@ -134,7 +130,7 @@ class Suit(enum.Enum):
         }[self]
 
 
-class Direction(enum.Enum):
+class Direction(Point, enum.Enum):
     EAST    = Point( 0, 1)
     SOUTH   = Point( 1, 0)
     WEST    = Point( 0,-1)
@@ -164,14 +160,12 @@ class Direction(enum.Enum):
         }[direction]
 
 
-@dataclasses.dataclass(frozen=True)
-class Player:
+class Player(typing.NamedTuple):
     name: str
     color: Color
 
 
-@dataclasses.dataclass(frozen=True)
-class Tile:
+class Tile(typing.NamedTuple):
     suit: Suit
     crowns: int = 0
 
@@ -189,8 +183,7 @@ class Tile:
         )
 
 
-@dataclasses.dataclass(order=True, frozen=True)
-class Domino:
+class Domino(typing.NamedTuple):
     number: int
     left: Tile
     right: Tile
@@ -270,7 +263,7 @@ class Play:
 
 class Grid:
 
-    def __init__(self, size):
+    def __init__(self, size: int):
         self.size = size
         self.max_size = size * 2 - 1
         half = size - 1
@@ -288,28 +281,22 @@ class Grid:
         return self.grid[point.x][point.y]
 
     def __setitem__(self, point: Point, tile: Tile) -> None:
-        a, b = self.min_max(point)
-        self.min_x, self.min_y = a
-        self.max_x, self.max_y = b
+        self.min_x, self.min_y = self.min(point)
+        self.max_x, self.max_y = self.max(point)
         self.grid[point.x][point.y] = tile
 
-    def min_max(self, point: Point) -> typing.Tuple[
-            typing.Tuple[int, int],
-            typing.Tuple[int, int],
-    ]:
-        min_x = min(self.min_x, point.x)
-        min_y = min(self.min_y, point.y)
-        max_x = max(self.max_x, point.x)
-        max_y = max(self.max_y, point.y)
-        return ((min_x, min_y), (max_x, max_y))
+    def min(self, point: Point) -> Point:
+        return Point(min(self.min_x, point.x), min(self.min_y, point.y))
+
+    def max(self, point: Point) -> Point:
+        return Point(max(self.max_x, point.x), max(self.max_y, point.y))
 
     def within_grid(self, point: Point) -> bool:
         return 0 <= point.x < self.max_size and 0 <= point.y < self.max_size
 
     def within_bounds(self, point: Point) -> bool:
-        a, b = self.min_max(point)
-        min_x, min_y = a
-        max_x, max_y = b
+        min_x, min_y = self.min(point)
+        max_x, max_y = self.max(point)
         return max_x - min_x < self.size and max_y - min_y < self.size
 
     def within(self, point: Point) -> bool:
@@ -413,7 +400,7 @@ class Board:
             * int(not self.discards)
         )
 
-    # PLAY VALIDATION
+    # PLAYING
 
     def discard(self, domino: Domino) -> None:
         self.discards.append(domino)
@@ -654,7 +641,6 @@ class Deck:
         ]
 
 
-@dataclasses.dataclass
 class Game:
     boards: typing.Dict[Player, Board]
     line: Line

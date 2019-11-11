@@ -6,7 +6,7 @@ class Node:
 
     def __init__(
         self,
-        item: typing.Generic[T],
+        item: T,
         parent: "Node"=None,
         size: int=1
     ):
@@ -76,7 +76,7 @@ class UnionFind:
 
     def groups(self) -> typing.FrozenSet[typing.FrozenSet[T]]:
 
-        d = {}
+        d: typing.Dict[Node, set] = {}
         for node in self._nodes.values():
             root = self._find(node)
             if root not in d:

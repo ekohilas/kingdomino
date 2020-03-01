@@ -8,9 +8,6 @@ import sys
 import typing
 import unionfind
 
-# TODO
-# check that the input is within the 5x5 grid
-
 class InvalidPlay(ValueError):
     pass
 
@@ -238,7 +235,6 @@ class Play:
             )
         ]
 
-    # Can be refactored
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Play):
             raise NotImplementedError
@@ -547,8 +543,8 @@ class Line:
         index: int=None,
         domino: Domino=None,
     ) -> None:
-        # refactor
-        if domino:
+        # TODO: Refactor
+        if domino is not None:
             index = self.line.index(domino)
         self.line[index][0] = player
 
@@ -672,7 +668,6 @@ class Game:
         self.set_initial_order()
 
     def add_rules(self, rules):
-        """TODO: add rule checking"""
         if rules:
             self.rules |= rules
 

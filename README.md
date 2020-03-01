@@ -1,5 +1,7 @@
 # Kingdomino
-## Fully Implemented in Python3 with Typing
+Fully Implemented in Python3 with Typing
+
+More here http://www.blueorangegames.eu/pf/kingdomino/
 
 ## Instructions
 1. `python3.6 -m pip install colored --user`

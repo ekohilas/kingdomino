@@ -1,5 +1,11 @@
 # Kingdomino
-Fully Implemented in Python3 with Typing
+
+Fully Implemented in Python 3.6+ including:
+* Typing
+* Valid play finder and santisation
+* Colored terminal play
+* Bonus rules
+* Constant time scorer from abstract object based Union Find
 
 More here http://www.blueorangegames.eu/pf/kingdomino/
 
@@ -11,6 +17,6 @@ More here http://www.blueorangegames.eu/pf/kingdomino/
 ## TODO
 * Refactor to simplify
 * Add rule checking
-* Check that the input is within the 5x5 grid?
+* Double check that the input is within the 5x5 grid?
 * Refactor `Play`'s `__eq__` function
 * Refactor `Line`'s `choose` function
